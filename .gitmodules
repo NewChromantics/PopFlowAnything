@@ -1,0 +1,3 @@
+[submodule "PopFlowAnything.js/PopEngine"]
+	path = PopFlowAnything.js/PopEngine
+	url = https://github.com/NewChromantics/PopEngineCommon.git
