@@ -49,6 +49,7 @@ canvas
 	background:	#eee;
 	min-height:	10vh;
 	overflow:	hidden;
+	white-space: pre;
 }
 
 #Preview
@@ -62,12 +63,12 @@ canvas
 
 </head>
 <body>
-<h1>Flow Anything</h1>
+<h1>Flow my vars, the parserman said.</h1>
 
 <div id="Layout">
 <!-- look into prism for auto highlighting https://css-tricks.com/creating-an-editable-textarea-that-supports-syntax-highlighted-code/ -->
 	<textarea id="Source">
-	something
+	something;
 	/* 
 		comment 
 	*/
@@ -90,6 +91,7 @@ canvas
 <script type=module>
 import * as PopFlowAnything from './PopFlowAnything.js/PopFlowAnything.js'
 import GlslParser from './PopFlowAnything.js/GlslParser.js'
+import {StripComments} from './PopFlowAnything.js/GlslParser.js'
 
 function ParseSource(Source)
 {
@@ -102,12 +104,16 @@ function OnSourceElementChanged(Element)
 	const Graph = document.querySelector(`#Graph`);
 	try
 	{
+		//	test comment-stripping
+		//const NewSource = StripComments(Source);
+		//Graph.textContent = NewSource;
+		
 		const Tokenised = ParseSource(Source);
-		Graph.innerText = JSON.stringify(Tokenised,null,'___');
+		Graph.textContent = JSON.stringify(Tokenised,null,'\t');
 	}
 	catch(e)
 	{
-		Graph.innerText = `${e}`;
+		Graph.textContent = `${e}`;
 	}
 }
 function OnSourceChangedEvent(Event)

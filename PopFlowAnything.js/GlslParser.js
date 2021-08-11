@@ -33,6 +33,12 @@ class Language_t
 			return;
 		return EscapeRegexSymbol(CloseSymbol);
 	}
+	
+	AllowEofSection()
+	{
+		return false;
+	}
+
 }
 
 class Language_Glsl extends Language_t
@@ -73,6 +79,11 @@ class Language_CComments extends Language_t
 		CloseSymbols['//'] = '\n';
 		return CloseSymbols[OpeningSymbol];
 	}
+	
+	AllowEofSection()
+	{
+		return true;
+	}
 };
 
 
@@ -82,7 +93,7 @@ function SplitSections(Source,Language)
 	
 	const WhitespaceMaybe = `\\s*`;
 	const Whitespace = `\\s`;
-	const Token = Language.GetTokenPattern();
+	//const Token = Language.GetTokenPattern();
 	//const OpenPattern = `^(${WhitespaceMaybe})(${Token})`;
 	const OpenSectionKeywords = Language.GetOpenSectionSymbolsPattern();	//	`;|{|/\\*`
 	const OpenPattern = `(${OpenSectionKeywords})`;
@@ -103,9 +114,12 @@ function SplitSections(Source,Language)
 			const TailWithoutWhitespace = TailSource.trim();
 			if ( TailWithoutWhitespace.length == 0 )
 				break;
-			throw `Syntax error, reached EOF ${TailSource} without matching section`;
+				
+			if ( !Language.AllowEofSection() )
+				throw `Syntax error, reached EOF ${TailSource} without matching section`;
+	
 			const Section = {};
-			Section.Content = TailSource;
+			Section.SectionContent = TailSource;
 			Section.Type = 'Eof';
 			Sections.push(Section);
 			break;
@@ -132,7 +146,7 @@ function SplitSections(Source,Language)
 			console.log(`Searching section ${InsideSource}`);
 			const CloseMatch = CloseRegex.exec(InsideSource);
 			if ( !CloseMatch )
-				throw `Failed to find closing token for ${Out.OpenToken}`;
+				throw `Failed to find closing token for ${OpenToken}`;
 			//Section.SectionContent = InsideSource.slice(0,CloseRegex.lastIndex);
 			Section.SectionContent = InsideSource.slice(0,CloseMatch.index);	//	dont include closing chars
 			
@@ -144,7 +158,7 @@ function SplitSections(Source,Language)
 		else
 		{
 			const Section = {};
-			Section.Prefix = Content.trim();
+			Section.SectionContent = Content.trim();
 			//Section.OpenToken = OpenToken;
 			Section.CloseToken = OpenToken;
 			Sections.push(Section);
@@ -156,9 +170,31 @@ function SplitSections(Source,Language)
 	return Sections;
 }
 
+//	returns new source
+export function StripComments(Source)
+{
+	function GetSourceFromSection(CommentSection)
+	{
+		if ( CommentSection.Type == 'Eof' )
+			return CommentSection.SectionContent;
+		return CommentSection.Prefix;
+	}
+
+	const CommentedSections = SplitSections( Source, new Language_CComments );
+	
+	const SourceSections = CommentedSections.map( GetSourceFromSection );
+	const NoCommentSource = SourceSections.join('\n');
+	return NoCommentSource;
+}
+
 
 export default function Parse(Source)
 {
+	//	gr: feel like we need a heirachical approach
+	//		where we split into comment sections, then macro sections, then parse the remaining sections
+	//	but MVP, remove comment blocks which can break parsing
+	Source = StripComments(Source);
+	
 	const Language = new Language_Glsl;
 	const Sections = SplitSections(Source,Language);
 	
