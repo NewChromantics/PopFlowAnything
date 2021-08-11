@@ -100,6 +100,13 @@ function SplitSections(Source,Language)
 
 	const Sections = [];
 
+	let LastSectionIdent = 1000;
+	function GetNewSectionIdent()
+	{
+		LastSectionIdent++;
+		return LastSectionIdent;
+	}
+
 	let SourcePos = 0;
 	
 	//	some sections can open inside other sections
@@ -146,6 +153,8 @@ function SplitSections(Source,Language)
 			if ( !CloseToken )
 			{
 				const Section = {};
+				Section.Ident = GetNewSectionIdent();
+				Section.Indent = SectionStack.length;
 				Section.SectionContent = Content.trim();
 				//Section.OpenToken = OpenToken;
 				Section.CloseToken = OpenToken;
@@ -157,6 +166,9 @@ function SplitSections(Source,Language)
 			
 			//	has a close token, so add to the stack, and hopefully next iteration will find it
 			const PendingSection = {};
+			PendingSection.Ident = GetNewSectionIdent();
+			PendingSection.ParentIdent = SectionStack.length ? SectionStack[SectionStack.length-1].Ident : null;
+			PendingSection.Indent = SectionStack.length;
 			PendingSection.Open_LastIndex = OpenRegex.lastIndex;
 			PendingSection.OpenToken = OpenToken;
 			PendingSection.CloseToken = CloseToken;
