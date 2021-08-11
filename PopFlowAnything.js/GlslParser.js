@@ -38,7 +38,12 @@ class Language_t
 	{
 		return false;
 	}
-
+	
+	//	when this section is open, we ignore all others
+	IsExclusiveOpenToken(OpenToken)
+	{
+		return false;
+	}
 }
 
 class Language_Glsl extends Language_t
@@ -63,6 +68,17 @@ class Language_Glsl extends Language_t
 		CloseSymbols['{'] = '}';	//	maybe this function should return a pattern so we can do };? here for optional ;
 		return CloseSymbols[OpeningSymbol];
 	}
+	
+	IsExclusiveOpenToken(OpenToken)
+	{
+		switch(OpenToken)
+		{
+			case '/*':
+			case '//':
+				return true;
+		}
+		return false;
+	}
 };
 
 class Language_CComments extends Language_t
@@ -83,6 +99,17 @@ class Language_CComments extends Language_t
 	AllowEofSection()
 	{
 		return true;
+	}
+	
+	IsExclusiveOpenToken(OpenToken)
+	{
+		switch(OpenToken)
+		{
+			case '/*':
+			case '//':
+				return true;
+		}
+		return false;
 	}
 };
 
@@ -134,12 +161,21 @@ function SplitSections(Source,Language)
 		//	pick whichever came first
 		if ( OpenMatch && CloseMatch )
 		{
-			if ( OpenMatch.index == CloseMatch.index )
-				throw `Close and open matches at same position! ${TailSource.slice(OpenMatch.index,10)}`;
-			if ( OpenMatch.index < CloseMatch.index )
-				CloseMatch = null;
-			else
+			//	if the pending open is exclusive, ignore new opening
+			//	todo: this is where we may need heirachy
+			if ( Language.IsExclusiveOpenToken(PendingSection.OpenToken) )
+			{
 				OpenMatch = null;
+			}
+			else
+			{
+				if ( OpenMatch.index == CloseMatch.index )
+					throw `Close and open matches at same position! ${TailSource.slice(OpenMatch.index,10)}`;
+				if ( OpenMatch.index < CloseMatch.index )
+					CloseMatch = null;
+				else
+					OpenMatch = null;
+			}
 		}
 
 		//	found another opening before a close
