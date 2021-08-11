@@ -51,7 +51,7 @@ class Language_Glsl extends Language_t
 	
 	GetOpenSectionSymbols()
 	{
-		return [';','{','/*'];
+		return [';','{','/*','//'];
 	}
 	
 	GetCloseSymbol(OpeningSymbol)
