@@ -2,10 +2,113 @@
 <head>
 
 <style>
+
+body
+{
+	display:		flex;
+	flex-direction: column;
+	position:		absolute;
+	bottom:			0px;
+	top:			0px;
+	left:			0px;
+	right:			0px;
+}
+
+#Layout
+{
+	flex-grow:		1;
+	
+	display:		flex;
+	flex-direction: row;
+}
+
+#Layout *
+{
+	flex-grow:	1;
+}
+
+
+textarea
+{
+	flex-grow:	3;
+	white-space: nowrap;
+	overflow: auto;
+	-moz-tab-size : 2;
+	-o-tab-size : 2;
+	tab-size : 2;
+}
+
+canvas
+{
+	width:	100%;
+	height:	auto;
+}
+
+#Graph
+{
+	background:	#eee;
+	min-height:	10vh;
+	overflow:	hidden;
+}
+
+#Preview
+{
+	background:	lime;
+	min-height:	10vh;
+}
+
+
 </style>
 
 </head>
 <body>
 <h1>Flow Anything</h1>
+
+<div id="Layout">
+<!-- look into prism for auto highlighting https://css-tricks.com/creating-an-editable-textarea-that-supports-syntax-highlighted-code/ -->
+	<textarea id="Source">
+	one two three;
+	four five;/* comment */
+	void hello()
+	{
+		functioncode();
+	};
+	</textarea>
+	
+	<div id="Graph"></div>
+
+</div>
+
+<script type=module>
+import * as PopFlowAnything from './PopFlowAnything.js/PopFlowAnything.js'
+import GlslParser from './PopFlowAnything.js/GlslParser.js'
+
+function ParseSource(Source)
+{
+	return GlslParser(Source);
+}
+
+function OnSourceElementChanged(Element)
+{
+	const Source = Element.value; 
+	const Tokenised = ParseSource(Source);
+	const Graph = document.querySelector(`#Graph`);
+	Graph.innerText = JSON.stringify(Tokenised,null,'___');
+}
+function OnSourceChangedEvent(Event)
+{
+	OnSourceElementChanged(Event.currentTarget);
+}
+
+const Source = document.querySelector(`textarea#Source`);
+Source.onload = OnSourceChangedEvent;
+Source.onloadeddata = OnSourceChangedEvent;
+Source.onchange = OnSourceChangedEvent;
+Source.oninput = OnSourceChangedEvent;
+OnSourceElementChanged(Source);
+
+
+</script>
+
 </body>
 </html>
