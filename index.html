@@ -69,7 +69,7 @@ canvas
 <!-- look into prism for auto highlighting https://css-tricks.com/creating-an-editable-textarea-that-supports-syntax-highlighted-code/ -->
 	<textarea id="Source">
 	
-	One Symbol broken /* in */ two;
+	One Symbol /* no longer broken in two */ comment should be child;
 	
 	something;
 	/* 
@@ -85,7 +85,6 @@ canvas
 		var InsideMain // no ; means this is a comment with a prefix, which we should fail on later
 	}
 	
-	
 	vec4 MyFunction()
 	{
 		/* comment with } inside func */
@@ -96,7 +95,7 @@ canvas
 	/* this_symbol_should_be_ignored_in_comment;
 	*/
 
-	function Hello(/* comment inside start of section breaks into two */){};
+	function Hello(/* comment inside prefix of section */){};
 
 	/* /* /* /* this shouldnt error as it should just be ignored */
 	End;

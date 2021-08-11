@@ -40,12 +40,18 @@ class Language_t
 	}
 	
 	//	when this section is open, we ignore all others
-	IsExclusiveOpenToken(OpenToken)
+	IsOpenTokenExclusive(OpenToken)
 	{
 		return false;
 	}
+	
+	IsOpenTokenAllowedPrefix(OpenToken)
+	{
+		return true;
+	}
 }
 
+//	todo: inherit from Language_CComments
 class Language_Glsl extends Language_t
 {
 	GetTokenPattern()
@@ -69,7 +75,7 @@ class Language_Glsl extends Language_t
 		return CloseSymbols[OpeningSymbol];
 	}
 	
-	IsExclusiveOpenToken(OpenToken)
+	IsOpenTokenExclusive(OpenToken)
 	{
 		switch(OpenToken)
 		{
@@ -78,6 +84,17 @@ class Language_Glsl extends Language_t
 				return true;
 		}
 		return false;
+	}
+	
+	IsOpenTokenAllowedPrefix(OpenToken)
+	{
+		switch(OpenToken)
+		{
+			case '/*':
+			case '//':
+				return false;
+		}
+		return true;
 	}
 };
 
@@ -101,7 +118,7 @@ class Language_CComments extends Language_t
 		return true;
 	}
 	
-	IsExclusiveOpenToken(OpenToken)
+	IsOpenTokenExclusive(OpenToken)
 	{
 		switch(OpenToken)
 		{
@@ -143,9 +160,13 @@ function SplitSections(Source,Language)
 	//	if we find close, close previous
 	let SectionStack = [];
 	
+	let ReinsertedSource = '';
+	
 	for ( let i=0;	i<1000;	i++ )
 	{
-		const TailSource = OriginalSource.slice(SourcePos);
+		const WasReinsertedSource = ReinsertedSource;
+		const TailSource = WasReinsertedSource + OriginalSource.slice(SourcePos);
+		ReinsertedSource = '';
 		//console.log(`Searching ${TailSource}`);
 		
 		//	look for a new opening 
@@ -163,7 +184,7 @@ function SplitSections(Source,Language)
 		{
 			//	if the pending open is exclusive, ignore new opening
 			//	todo: this is where we may need heirachy
-			if ( Language.IsExclusiveOpenToken(PendingSection.OpenToken) )
+			if ( Language.IsOpenTokenExclusive(PendingSection.OpenToken) )
 			{
 				OpenMatch = null;
 			}
@@ -197,6 +218,7 @@ function SplitSections(Source,Language)
 				Sections.push(Section);
 			
 				SourcePos += OpenRegex.lastIndex;
+				SourcePos -= WasReinsertedSource.length;
 				continue;
 			}
 			
@@ -211,6 +233,7 @@ function SplitSections(Source,Language)
 			SectionStack.push(PendingSection);
 			
 			SourcePos += OpenRegex.lastIndex;
+			SourcePos -= WasReinsertedSource.length;
 			continue;
 		}
 
@@ -219,6 +242,17 @@ function SplitSections(Source,Language)
 		{
 			const Section = SectionStack.pop();	//PendingSection;
 			delete Section.Open_LastIndex;		//	dont output this
+			
+			//	this section doesnt have prefixes, (eg. text before comment)
+			//	so the prefix is part of the parent, so need to get put back into the parent, or if there isn't one, back in the source we're parsing...
+			if ( !Language.IsOpenTokenAllowedPrefix(Section.OpenToken) )
+			{
+				const ReinsertMe = Section.Prefix;
+				console.log(ReinsertMe,SectionStack[SectionStack.length-1]);
+				ReinsertedSource = ReinsertMe;
+				Section.Prefix = '';
+			}
+			
 			//Section.Prefix = Content.trim();	//	whitespace or prefix for the section
 			Section.Prefix = Section.Prefix.trim();
 			//Section.OpenToken = OpenToken;
@@ -229,6 +263,7 @@ function SplitSections(Source,Language)
 			Sections.push(Section);
 			
 			SourcePos += CloseRegex.lastIndex;
+			SourcePos -= WasReinsertedSource.length;
 		}
 
 		//	this could be syntax error, or whitespace at the end
