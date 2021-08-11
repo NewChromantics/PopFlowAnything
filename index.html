@@ -69,6 +69,8 @@ canvas
 <!-- look into prism for auto highlighting https://css-tricks.com/creating-an-editable-textarea-that-supports-syntax-highlighted-code/ -->
 	<textarea id="Source">
 	
+	One Symbol broken /* in */ two;
+	
 	something;
 	/* 
 		comment 
@@ -94,7 +96,9 @@ canvas
 	/* this_symbol_should_be_ignored_in_comment;
 	*/
 
-	/* /* this shouldnt error as it should just be ignored */
+	function Hello(/* comment inside start of section breaks into two */){};
+
+	/* /* /* /* this shouldnt error as it should just be ignored */
 	End;
 	
 	</textarea>
