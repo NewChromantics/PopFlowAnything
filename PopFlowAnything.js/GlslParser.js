@@ -12,22 +12,84 @@ function StripComments(Source,EnumCommentBlock)
 {
 }
 
+function EscapeRegexSymbol(Symbol)
+{
+	//	https://stackoverflow.com/a/3561711/355753
+	//const Replaced = Symbol.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+	const Replaced = Symbol.replace(/[\\^$.|?*+()[{]/g, '\\$&');
+	return Replaced;
+}
+
+class Language_t
+{
+	GetOpenSectionSymbolsPattern()
+	{
+		let Symbols = this.GetOpenSectionSymbols();
+		Symbols = Symbols.map(EscapeRegexSymbol);
+		const Pattern = Symbols.join('|');
+		return Pattern;
+	}
+	
+	GetCloseSymbolPattern(OpeningSymbol)
+	{
+		let CloseSymbol = this.GetCloseSymbol(OpeningSymbol);
+		if ( !CloseSymbol )
+			return;
+		return EscapeRegexSymbol(CloseSymbol);
+	}
+}
+
+class Language_Glsl extends Language_t
+{
+	GetTokenPattern()
+	{
+		//	todo; symbols can't start with numbers
+		return '[a-zA-Z0-9_;]+';
+	}
+	
+	GetOpenSectionSymbols()
+	{
+		return [';','{','/*'];
+	}
+	
+	GetCloseSymbol(OpeningSymbol)
+	{
+		const CloseSymbols = {};
+		CloseSymbols[';'] = null;
+		CloseSymbols['/*'] = '*/';
+		CloseSymbols['//'] = '\n';
+		CloseSymbols['{'] = '}';	//	maybe this function should return a pattern so we can do };? here for optional ;
+		return CloseSymbols[OpeningSymbol];
+	}
+};
+
+class Language_CComments extends Language_t
+{
+	GetOpenSectionSymbols()
+	{
+		return ['/*','//'];
+	}
+	
+	GetCloseSymbol(OpeningSymbol)
+	{
+		const CloseSymbols = {};
+		CloseSymbols['/*'] = '*/';
+		CloseSymbols['//'] = '\n';
+		return CloseSymbols[OpeningSymbol];
+	}
+};
 
 
-export default function Parse(Source)
+function ParseSections(Source,Language)
 {
 	const OriginalSource = Source;
 	
 	const WhitespaceMaybe = `\\s*`;
 	const Whitespace = `\\s`;
-	const Token = `[a-zA-Z0-9_;]+`;
+	const Token = Language.GetTokenPattern();
 	//const OpenPattern = `^(${WhitespaceMaybe})(${Token})`;
-	const OpenSectionKeywords = `;|{|/\\*`
+	const OpenSectionKeywords = Language.GetOpenSectionSymbolsPattern();	//	`;|{|/\\*`
 	const OpenPattern = `(${OpenSectionKeywords})`;
-
-	const CloseSectionKeywords = {};
-	CloseSectionKeywords['{'] = '};?';
-	CloseSectionKeywords['/*'] = '\\*/';
 
 	const Tokens = [];
 
@@ -47,13 +109,13 @@ export default function Parse(Source)
 		const Out = {};
 		Out.Content = Content.trim();
 		Out.OpenToken = OpenToken;
-		Out.CloseToken = CloseSectionKeywords[OpenToken];
+		Out.CloseToken = Language.GetCloseSymbol(OpenToken);
 
 		//	gotta find end of the section
 		if ( Out.CloseToken )		
 		{
-			const ClosePattern = `(${Out.CloseToken})`;	//	todo: need to include opening comment block
-			const CloseRegex = RegExp(ClosePattern,'g');
+			const ClosePattern = Language.GetCloseSymbolPattern(OpenToken);
+			const CloseRegex = RegExp(`(${ClosePattern})`,'g');
 			//const InsideSource = TailSource.slice( OpenMatch.index );
 			const InsideSource = TailSource.slice( OpenRegex.lastIndex );	//	dont include open chars
 			console.log(`Searching section ${InsideSource}`);
@@ -75,5 +137,14 @@ export default function Parse(Source)
 	}
 	
 	return Tokens;
+}
+
+
+export default function Parse(Source)
+{
+	const Language = new Language_Glsl;
+	const Sections = ParseSections(Source,Language);
+	
+	return Sections;
 }
 
