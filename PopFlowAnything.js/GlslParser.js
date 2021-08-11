@@ -200,7 +200,7 @@ function SplitSections(Source,Language)
 		{
 			//	gr: should error if we have an pending section?
 			if ( PendingSection )
-				throw `Syntax error, reached EOF ${TailSource} without matching an open section`;
+				throw `Syntax error, reached EOF ${TailSource} but we still have a ${PendingSection.OpenToken} section still open`;
 			
 			const TailWithoutWhitespace = TailSource.trim();
 			if ( TailWithoutWhitespace.length == 0 )

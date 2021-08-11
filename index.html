@@ -69,28 +69,32 @@ canvas
 <!-- look into prism for auto highlighting https://css-tricks.com/creating-an-editable-textarea-that-supports-syntax-highlighted-code/ -->
 	<textarea id="Source">
 	
+	something;
+	/* 
+		comment 
+	*/
+	
 	void main()
 	{
 		// make sure we can have scope inside scope
 		{
 			float InsideScope;
 		}
-		var InsideMain	//	no error for missing end-token
+		var InsideMain // no ; means this is a comment with a prefix, which we should fail on later
 	}
 	
-	something;
-	/* 
-		comment 
-	*/
 	
 	vec4 MyFunction()
 	{
 		/* comment with } inside func */
-		// this comment isn't being extracted from the function...
+		// this comment should extract now
 		float Hello;
 	}
 	
-	/* Comment 2 */
+	/* this_symbol_should_be_ignored_in_comment;
+	*/
+
+	/* /* this shouldnt error as it should just be ignored */
 	End;
 	
 	</textarea>
