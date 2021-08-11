@@ -1,13 +1,3 @@
-
-
-//	gr: feels like we need a heirachy of "filters" for the code?
-//	does this apply to other languages?
-//		comment blocks	(could contain code+macros)
-//		macros			(could contain code)
-//		normal code
-
-
-
 function EscapeRegexSymbol(Symbol)
 {
 	//	https://stackoverflow.com/a/3561711/355753
@@ -133,18 +123,13 @@ class Language_CComments extends Language_t
 	}
 };
 
-
+/*
+	this now splits the source into a tree of sections, based on the language policy
+*/
 function SplitSections(Source,Language)
 {
 	const OriginalSource = Source;
 	
-	const WhitespaceMaybe = `\\s*`;
-	const Whitespace = `\\s`;
-	//const Token = Language.GetTokenPattern();
-	//const OpenPattern = `^(${WhitespaceMaybe})(${Token})`;
-	const OpenSectionKeywords = Language.GetOpenSectionSymbolsPattern();	//	`;|{|/\\*`
-	const OpenPattern = `(${OpenSectionKeywords})`;
-
 	const Sections = [];
 
 	let LastSectionIdent = 1000;
@@ -163,6 +148,11 @@ function SplitSections(Source,Language)
 	//	if we find close, close previous
 	let SectionStack = [];
 	
+	//	if something interrupts the parent section (or general source) we re-search
+	//	it's prefix (if it doesn't use it) so it can be captured in previous
+	//		function before {}		uses prefix
+	//		/* */					reinserts prefix
+	//	this currently breaks the order, as the prefix should really come first (and the interruptor should be a child of it)
 	let ReinsertedSource = '';
 	
 	for ( let i=0;	i<1000;	i++ )
@@ -170,13 +160,13 @@ function SplitSections(Source,Language)
 		const WasReinsertedSource = ReinsertedSource;
 		const TailSource = WasReinsertedSource + OriginalSource.slice(SourcePos);
 		ReinsertedSource = '';
-		//console.log(`Searching ${TailSource}`);
 		
-		//	look for a new opening 
-		//	todo: not all opens are allowed inside some sections; eg ignore { inside /*
+		const OpenSectionKeywords = Language.GetOpenSectionSymbolsPattern();
+		const OpenPattern = `(${OpenSectionKeywords})`;
 		const OpenRegex = RegExp(OpenPattern,'g');	//	use 'g'lobal so we can find out where this string ended
 		let OpenMatch = OpenRegex.exec(TailSource);
 		
+		//	make & match a close section if something is waiting to close
 		const PendingSection = SectionStack.length ? SectionStack[SectionStack.length-1] : null;
 		const ClosePattern = PendingSection ? Language.GetCloseSymbolPattern(PendingSection.OpenToken) : null;
 		const CloseRegex = ClosePattern ? RegExp(`(${ClosePattern})`,'g') : null;
@@ -186,7 +176,7 @@ function SplitSections(Source,Language)
 		if ( OpenMatch && CloseMatch )
 		{
 			//	if the pending open is exclusive, ignore new opening
-			//	todo: this is where we may need heirachy
+			//	todo: this is where we may need priority of exclusivity
 			if ( Language.IsOpenTokenExclusive(PendingSection.OpenToken) )
 			{
 				OpenMatch = null;
@@ -273,10 +263,11 @@ function SplitSections(Source,Language)
 		//	this could be syntax error, or whitespace at the end
 		if ( !OpenMatch && !CloseMatch )
 		{
-			//	gr: should error if we have an pending section?
+			//	gr: should always error if we have an pending section?
 			if ( PendingSection )
 				throw `Syntax error, reached EOF ${TailSource} but we still have a ${PendingSection.OpenToken} section still open`;
 			
+			//	just whitespace, clip it
 			const TailWithoutWhitespace = TailSource.trim();
 			if ( TailWithoutWhitespace.length == 0 )
 				break;
@@ -340,7 +331,7 @@ function SplitSections(Source,Language)
 		Parent.Children = Parent.Children || [];
 		//	gr: INSERT at the start as we're iterating backwards and pushing means earlier entries go at the back
 		Parent.Children.unshift(Section);
-		//	remove from sections
+		//	remove from root sections
 		Sections.splice(i,1);
 	}
 		
@@ -349,6 +340,7 @@ function SplitSections(Source,Language)
 }
 
 //	returns new source
+//	gr: no longer needed, but left as an example
 export function StripComments(Source)
 {
 	function GetSourceFromSection(CommentSection)
@@ -368,14 +360,9 @@ export function StripComments(Source)
 
 export default function Parse(Source)
 {
-	//	gr: feel like we need a heirachical approach
-	//		where we split into comment sections, then macro sections, then parse the remaining sections
-	//	but MVP, remove comment blocks which can break parsing
-	//Source = StripComments(Source);
-	
 	const Language = new Language_Glsl;
-	const Sections = SplitSections(Source,Language);
+	const SectionTree = SplitSections(Source,Language);
 	
-	return Sections;
+	return SectionTree;
 }
 
