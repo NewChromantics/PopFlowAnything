@@ -8,7 +8,7 @@
 
 //	returns new source
 //	EnumCommentBlock(CommentMeta)	.Start .End .Content
-function StripComments(Source,EnumCommentBlock)
+function StripSections(Source,EnumSectionBlock)
 {
 }
 
@@ -102,7 +102,18 @@ function ParseSections(Source,Language)
 		console.log(`Searching ${TailSource}`);
 		const OpenMatch = OpenRegex.exec(TailSource);
 		if ( !OpenMatch )
+		{
+			//	this could be syntax error, or whitespace
+			const TailWithoutWhitespace = TailSource.trim();
+			if ( TailWithoutWhitespace.length == 0 )
+				break;
+			throw `Syntax error, reached EOF ${TailSource} without sections`;
+			const Out = {};
+			Out.Content = TailSource;
+			Out.Type = 'Eof';
+			Tokens.push(Out);
 			break;
+		}
 			
 		const Content = TailSource.slice( 0, OpenMatch.index );
 		const OpenToken = OpenMatch[1];

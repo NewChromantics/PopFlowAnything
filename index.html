@@ -67,12 +67,14 @@ canvas
 <div id="Layout">
 <!-- look into prism for auto highlighting https://css-tricks.com/creating-an-editable-textarea-that-supports-syntax-highlighted-code/ -->
 	<textarea id="Source">
-	one two three;
-	four five;/* comment */
-	void hello()
-	{
-		functioncode();
-	};
+	something
+	/* 
+		comment 
+	*/
+	
+	/* Comment 2 */
+	End;
+	
 	</textarea>
 	
 	<div id="Graph"></div>
@@ -91,9 +93,16 @@ function ParseSource(Source)
 function OnSourceElementChanged(Element)
 {
 	const Source = Element.value; 
-	const Tokenised = ParseSource(Source);
 	const Graph = document.querySelector(`#Graph`);
-	Graph.innerText = JSON.stringify(Tokenised,null,'___');
+	try
+	{
+		const Tokenised = ParseSource(Source);
+		Graph.innerText = JSON.stringify(Tokenised,null,'___');
+	}
+	catch(e)
+	{
+		Graph.innerText = `${e}`;
+	}
 }
 function OnSourceChangedEvent(Event)
 {
