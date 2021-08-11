@@ -62,7 +62,7 @@ class Language_Glsl extends Language_t
 	
 	GetOpenSectionSymbols()
 	{
-		return [';','{','/*','//'];
+		return [';','{','/*','//','#'];
 	}
 	
 	GetCloseSymbol(OpeningSymbol)
@@ -72,6 +72,8 @@ class Language_Glsl extends Language_t
 		CloseSymbols['/*'] = '*/';
 		CloseSymbols['//'] = '\n';
 		CloseSymbols['{'] = '}';	//	maybe this function should return a pattern so we can do };? here for optional ;
+		CloseSymbols['#'] = '\n';	//	maybe this function should return a pattern so we can do };? here for optional ;
+		
 		return CloseSymbols[OpeningSymbol];
 	}
 	
@@ -92,6 +94,7 @@ class Language_Glsl extends Language_t
 		{
 			case '/*':
 			case '//':
+			case '#':
 				return false;
 		}
 		return true;
@@ -258,7 +261,8 @@ function SplitSections(Source,Language)
 			//Section.OpenToken = OpenToken;
 			//Section.CloseToken = CloseToken;
 			Section.SectionContent = TailSource.slice(0,CloseMatch.index);
-			Section.SectionContent = Section.SectionContent.trim();
+			//	dont trim left in case the opening token doesnt allow whitespace (eg #define)
+			Section.SectionContent = Section.SectionContent.trimEnd();
 			
 			Sections.push(Section);
 			

@@ -68,8 +68,12 @@ canvas
 <div id="Layout">
 <!-- look into prism for auto highlighting https://css-tricks.com/creating-an-editable-textarea-that-supports-syntax-highlighted-code/ -->
 	<textarea id="Source">
+	#define X macro!
+	# macro with space should have whitespace in content for later errors
+
+	One Symbol /* no longer broken in two */, todo: comment should be child;
 	
-	One Symbol /* no longer broken in two */ comment should be child;
+	Stuff before # keywords/key symbols should split sections
 	
 	something;
 	/* 
