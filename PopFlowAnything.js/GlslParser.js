@@ -6,11 +6,7 @@
 //		macros			(could contain code)
 //		normal code
 
-//	returns new source
-//	EnumCommentBlock(CommentMeta)	.Start .End .Content
-function StripSections(Source,EnumSectionBlock)
-{
-}
+
 
 function EscapeRegexSymbol(Symbol)
 {
@@ -80,7 +76,7 @@ class Language_CComments extends Language_t
 };
 
 
-function ParseSections(Source,Language)
+function SplitSections(Source,Language)
 {
 	const OriginalSource = Source;
 	
@@ -91,7 +87,7 @@ function ParseSections(Source,Language)
 	const OpenSectionKeywords = Language.GetOpenSectionSymbolsPattern();	//	`;|{|/\\*`
 	const OpenPattern = `(${OpenSectionKeywords})`;
 
-	const Tokens = [];
+	const Sections = [];
 
 	let SourcePos = 0;
 	for ( let i=0;	i<1000;	i++ )
@@ -107,24 +103,28 @@ function ParseSections(Source,Language)
 			const TailWithoutWhitespace = TailSource.trim();
 			if ( TailWithoutWhitespace.length == 0 )
 				break;
-			throw `Syntax error, reached EOF ${TailSource} without sections`;
-			const Out = {};
-			Out.Content = TailSource;
-			Out.Type = 'Eof';
-			Tokens.push(Out);
+			throw `Syntax error, reached EOF ${TailSource} without matching section`;
+			const Section = {};
+			Section.Content = TailSource;
+			Section.Type = 'Eof';
+			Sections.push(Section);
 			break;
 		}
-			
+		
 		const Content = TailSource.slice( 0, OpenMatch.index );
 		const OpenToken = OpenMatch[1];
-		const Out = {};
-		Out.Content = Content.trim();
-		Out.OpenToken = OpenToken;
-		Out.CloseToken = Language.GetCloseSymbol(OpenToken);
-
-		//	gotta find end of the section
-		if ( Out.CloseToken )		
+		const CloseToken = Language.GetCloseSymbol(OpenToken);
+		
+		//	if this has a close token, then we have prefix (eg. function()) and then the section
+		//	if not, then the open token is the end of the line/section
+		//	todo? should the section split prefix(comment block) or include prefix(function)
+		if ( CloseToken )		
 		{
+			const Section = {};
+			Section.Prefix = Content.trim();	//	whitespace or prefix for the section
+			Section.OpenToken = OpenToken;
+			Section.CloseToken = CloseToken;
+
 			const ClosePattern = Language.GetCloseSymbolPattern(OpenToken);
 			const CloseRegex = RegExp(`(${ClosePattern})`,'g');
 			//const InsideSource = TailSource.slice( OpenMatch.index );
@@ -133,28 +133,34 @@ function ParseSections(Source,Language)
 			const CloseMatch = CloseRegex.exec(InsideSource);
 			if ( !CloseMatch )
 				throw `Failed to find closing token for ${Out.OpenToken}`;
-			//Out.SectionContent = InsideSource.slice(0,CloseRegex.lastIndex);
-			Out.SectionContent = InsideSource.slice(0,CloseMatch.index);	//	dont include closing chars
+			//Section.SectionContent = InsideSource.slice(0,CloseRegex.lastIndex);
+			Section.SectionContent = InsideSource.slice(0,CloseMatch.index);	//	dont include closing chars
+			
+			Sections.push(Section);
 			
 			SourcePos += OpenRegex.lastIndex;	//	start of InsideSource
 			SourcePos += CloseRegex.lastIndex;	//	end of InsideSource
 		}
 		else
 		{
+			const Section = {};
+			Section.Prefix = Content.trim();
+			//Section.OpenToken = OpenToken;
+			Section.CloseToken = OpenToken;
+			Sections.push(Section);
+			
 			SourcePos += OpenRegex.lastIndex;
 		}
-		
-		Tokens.push(Out);
 	}
 	
-	return Tokens;
+	return Sections;
 }
 
 
 export default function Parse(Source)
 {
 	const Language = new Language_Glsl;
-	const Sections = ParseSections(Source,Language);
+	const Sections = SplitSections(Source,Language);
 	
 	return Sections;
 }
