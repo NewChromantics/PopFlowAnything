@@ -153,6 +153,7 @@ function SplitSections(Source,Language)
 			if ( !CloseToken )
 			{
 				const Section = {};
+				Section.ParentIdent = SectionStack.length ? SectionStack[SectionStack.length-1].Ident : null;
 				Section.Ident = GetNewSectionIdent();
 				Section.Indent = SectionStack.length;
 				Section.SectionContent = Content.trim();
@@ -220,6 +221,55 @@ function SplitSections(Source,Language)
 	
 	if ( SectionStack.length )
 		throw `Leftover section stack, shouldn't happen?`;
+	
+	//	turn into a tree (at least, move children into their parents, so sections becomes root nodes)
+	function GetSection(Ident)
+	{
+		function FindInChildren(Section)
+		{
+			if ( !Section.Children )
+				return null;
+			
+			return FindInArray(Section.Children);
+		}
+		
+		function FindInArray(SectionList)
+		{
+			for ( let Section of SectionList )
+			{
+				if ( Section.Ident == Ident )
+					return Section;
+				//	check children
+				const ChildMatch = FindInChildren(Section);
+				if ( ChildMatch )
+					return ChildMatch;
+			}
+			return null;
+		}		
+		
+		const Match = FindInArray(Sections);
+		if ( Match )
+			return Match;
+		throw `Failed to find section with ident ${Ident}, but it must exist`;
+	}
+	
+	//	work backwards for array safety
+	for ( let i=Sections.length-1;	i>=0;	i-- )
+	{
+		const Section = Sections[i];
+		
+		//	is root
+		if ( !Section.ParentIdent )
+			continue;
+		
+		//	move into parent
+		const Parent = GetSection(Section.ParentIdent);
+		Parent.Children = Parent.Children || [];
+		Parent.Children.push(Section);
+		//	remove from sections
+		Sections.splice(i,1);
+	}
+		
 	
 	return Sections;
 }
