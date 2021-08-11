@@ -72,8 +72,10 @@ canvas
 	void main()
 	{
 		// make sure we can have scope inside scope
-		{	
+		{
+			float InsideScope;
 		}
+		var InsideMain	//	no error for missing end-token
 	}
 	
 	something;

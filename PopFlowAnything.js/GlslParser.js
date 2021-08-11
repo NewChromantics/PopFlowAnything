@@ -177,6 +177,7 @@ function SplitSections(Source,Language)
 			//Section.OpenToken = OpenToken;
 			//Section.CloseToken = CloseToken;
 			Section.SectionContent = TailSource.slice(0,CloseMatch.index);
+			Section.SectionContent = Section.SectionContent.trim();
 			
 			Sections.push(Section);
 			
