@@ -101,16 +101,94 @@ function SplitSections(Source,Language)
 	const Sections = [];
 
 	let SourcePos = 0;
+	
+	//	some sections can open inside other sections
+	//	eg. { { /*
+	//	look for open, and close if stack isn't empty
+	//	if we find open, open and add to stack (dont search for close here)
+	//	if we find close, close previous
+	let SectionStack = [];
+	
 	for ( let i=0;	i<1000;	i++ )
 	{
 		const TailSource = OriginalSource.slice(SourcePos);
-		//	use 'g'lobal so we can find out where this string ended
-		const OpenRegex = RegExp(OpenPattern,'g');
-		console.log(`Searching ${TailSource}`);
-		const OpenMatch = OpenRegex.exec(TailSource);
-		if ( !OpenMatch )
+		//console.log(`Searching ${TailSource}`);
+		
+		//	look for a new opening 
+		//	todo: not all opens are allowed inside some sections; eg ignore { inside /*
+		const OpenRegex = RegExp(OpenPattern,'g');	//	use 'g'lobal so we can find out where this string ended
+		let OpenMatch = OpenRegex.exec(TailSource);
+		
+		const PendingSection = SectionStack.length ? SectionStack[SectionStack.length-1] : null;
+		const ClosePattern = PendingSection ? Language.GetCloseSymbolPattern(PendingSection.OpenToken) : null;
+		const CloseRegex = ClosePattern ? RegExp(`(${ClosePattern})`,'g') : null;
+		let CloseMatch = CloseRegex ? CloseRegex.exec(TailSource) : null;
+
+		//	pick whichever came first
+		if ( OpenMatch && CloseMatch )
 		{
-			//	this could be syntax error, or whitespace
+			if ( OpenMatch.index == CloseMatch.index )
+				throw `Close and open matches at same position! ${TailSource.slice(OpenMatch.index,10)}`;
+			if ( OpenMatch.index < CloseMatch.index )
+				CloseMatch = null;
+			else
+				OpenMatch = null;
+		}
+
+		//	found another opening before a close
+		if ( OpenMatch )
+		{
+			const Content = TailSource.slice( 0, OpenMatch.index );
+			const OpenToken = OpenMatch[1];
+			const CloseToken = Language.GetCloseSymbol(OpenToken);
+		
+			//	auto-closing section
+			if ( !CloseToken )
+			{
+				const Section = {};
+				Section.SectionContent = Content.trim();
+				//Section.OpenToken = OpenToken;
+				Section.CloseToken = OpenToken;
+				Sections.push(Section);
+			
+				SourcePos += OpenRegex.lastIndex;
+				continue;
+			}
+			
+			//	has a close token, so add to the stack, and hopefully next iteration will find it
+			const PendingSection = {};
+			PendingSection.Open_LastIndex = OpenRegex.lastIndex;
+			PendingSection.OpenToken = OpenToken;
+			PendingSection.CloseToken = CloseToken;
+			PendingSection.Prefix = Content;	//	.trim?
+			SectionStack.push(PendingSection);
+			
+			SourcePos += OpenRegex.lastIndex;
+			continue;
+		}
+
+		//	found a close for the pending section
+		if ( CloseMatch )
+		{
+			const Section = SectionStack.pop();	//PendingSection;
+			//Section.Prefix = Content.trim();	//	whitespace or prefix for the section
+			Section.Prefix = Section.Prefix.trim();
+			//Section.OpenToken = OpenToken;
+			//Section.CloseToken = CloseToken;
+			Section.SectionContent = TailSource.slice(0,CloseMatch.index);
+			
+			Sections.push(Section);
+			
+			SourcePos += CloseRegex.lastIndex;
+		}
+
+		//	this could be syntax error, or whitespace at the end
+		if ( !OpenMatch && !CloseMatch )
+		{
+			//	gr: should error if we have an pending section?
+			if ( PendingSection )
+				throw `Syntax error, reached EOF ${TailSource} without matching an open section`;
+			
 			const TailWithoutWhitespace = TailSource.trim();
 			if ( TailWithoutWhitespace.length == 0 )
 				break;
@@ -124,48 +202,10 @@ function SplitSections(Source,Language)
 			Sections.push(Section);
 			break;
 		}
-		
-		const Content = TailSource.slice( 0, OpenMatch.index );
-		const OpenToken = OpenMatch[1];
-		const CloseToken = Language.GetCloseSymbol(OpenToken);
-		
-		//	if this has a close token, then we have prefix (eg. function()) and then the section
-		//	if not, then the open token is the end of the line/section
-		//	todo? should the section split prefix(comment block) or include prefix(function)
-		if ( CloseToken )		
-		{
-			const Section = {};
-			Section.Prefix = Content.trim();	//	whitespace or prefix for the section
-			Section.OpenToken = OpenToken;
-			Section.CloseToken = CloseToken;
-
-			const ClosePattern = Language.GetCloseSymbolPattern(OpenToken);
-			const CloseRegex = RegExp(`(${ClosePattern})`,'g');
-			//const InsideSource = TailSource.slice( OpenMatch.index );
-			const InsideSource = TailSource.slice( OpenRegex.lastIndex );	//	dont include open chars
-			console.log(`Searching section ${InsideSource}`);
-			const CloseMatch = CloseRegex.exec(InsideSource);
-			if ( !CloseMatch )
-				throw `Failed to find closing token for ${OpenToken}`;
-			//Section.SectionContent = InsideSource.slice(0,CloseRegex.lastIndex);
-			Section.SectionContent = InsideSource.slice(0,CloseMatch.index);	//	dont include closing chars
-			
-			Sections.push(Section);
-			
-			SourcePos += OpenRegex.lastIndex;	//	start of InsideSource
-			SourcePos += CloseRegex.lastIndex;	//	end of InsideSource
-		}
-		else
-		{
-			const Section = {};
-			Section.SectionContent = Content.trim();
-			//Section.OpenToken = OpenToken;
-			Section.CloseToken = OpenToken;
-			Sections.push(Section);
-			
-			SourcePos += OpenRegex.lastIndex;
-		}
 	}
+	
+	if ( SectionStack.length )
+		throw `Leftover section stack, shouldn't happen?`;
 	
 	return Sections;
 }
@@ -193,7 +233,7 @@ export default function Parse(Source)
 	//	gr: feel like we need a heirachical approach
 	//		where we split into comment sections, then macro sections, then parse the remaining sections
 	//	but MVP, remove comment blocks which can break parsing
-	Source = StripComments(Source);
+	//Source = StripComments(Source);
 	
 	const Language = new Language_Glsl;
 	const Sections = SplitSections(Source,Language);
