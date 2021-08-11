@@ -155,7 +155,6 @@ function SplitSections(Source,Language)
 				const Section = {};
 				Section.ParentIdent = SectionStack.length ? SectionStack[SectionStack.length-1].Ident : null;
 				Section.Ident = GetNewSectionIdent();
-				Section.Indent = SectionStack.length;
 				Section.SectionContent = Content.trim();
 				//Section.OpenToken = OpenToken;
 				Section.CloseToken = OpenToken;
@@ -169,7 +168,6 @@ function SplitSections(Source,Language)
 			const PendingSection = {};
 			PendingSection.Ident = GetNewSectionIdent();
 			PendingSection.ParentIdent = SectionStack.length ? SectionStack[SectionStack.length-1].Ident : null;
-			PendingSection.Indent = SectionStack.length;
 			PendingSection.Open_LastIndex = OpenRegex.lastIndex;
 			PendingSection.OpenToken = OpenToken;
 			PendingSection.CloseToken = CloseToken;
@@ -265,7 +263,8 @@ function SplitSections(Source,Language)
 		//	move into parent
 		const Parent = GetSection(Section.ParentIdent);
 		Parent.Children = Parent.Children || [];
-		Parent.Children.push(Section);
+		//	gr: INSERT at the start as we're iterating backwards and pushing means earlier entries go at the back
+		Parent.Children.unshift(Section);
 		//	remove from sections
 		Sections.splice(i,1);
 	}
