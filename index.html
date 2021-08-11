@@ -71,8 +71,8 @@ canvas
 	
 	void main()
 	{
-		{
-		//	this breaks parser
+		// make sure we can have scope inside scope
+		{	
 		}
 	}
 	
@@ -84,7 +84,8 @@ canvas
 	vec4 MyFunction()
 	{
 		/* comment with } inside func */
-		// func contents
+		// this comment isn't being extracted from the function...
+		float Hello;
 	}
 	
 	/* Comment 2 */

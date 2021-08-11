@@ -171,6 +171,7 @@ function SplitSections(Source,Language)
 		if ( CloseMatch )
 		{
 			const Section = SectionStack.pop();	//PendingSection;
+			delete Section.Open_LastIndex;		//	dont output this
 			//Section.Prefix = Content.trim();	//	whitespace or prefix for the section
 			Section.Prefix = Section.Prefix.trim();
 			//Section.OpenToken = OpenToken;
