@@ -116,13 +116,8 @@ canvas
 
 <script type=module>
 import * as PopFlowAnything from './PopFlowAnything.js/PopFlowAnything.js'
-import GlslParser from './PopFlowAnything.js/GlslParser.js'
-import {StripComments} from './PopFlowAnything.js/GlslParser.js'
+import {ParseGlsl,StripComments} from './PopFlowAnything.js/LanguageParser.js'
 
-function ParseSource(Source)
-{
-	return GlslParser(Source);
-}
 
 function OnSourceElementChanged(Element)
 {
@@ -134,7 +129,7 @@ function OnSourceElementChanged(Element)
 		const NewSource = StripComments(Source);
 		Graph.textContent = NewSource;
 
-		const Tokenised = ParseSource(Source);
+		const Tokenised = ParseGlsl(Source);
 		Graph.textContent = JSON.stringify(Tokenised,null,'\t');
 	}
 	catch(e)

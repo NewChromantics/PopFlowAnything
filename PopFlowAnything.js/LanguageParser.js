@@ -1,3 +1,4 @@
+//import {Language_Glsl,Language_CComments} from './Languages.js'
 function EscapeRegexSymbol(Symbol)
 {
 	//	https://stackoverflow.com/a/3561711/355753
@@ -6,7 +7,7 @@ function EscapeRegexSymbol(Symbol)
 	return Replaced;
 }
 
-class Language_t
+export class Language_t
 {
 	GetOpenSectionSymbolsPattern()
 	{
@@ -42,7 +43,7 @@ class Language_t
 }
 
 //	todo: inherit from Language_CComments
-class Language_Glsl extends Language_t
+export class Language_Glsl extends Language_t
 {
 	GetTokenPattern()
 	{
@@ -91,7 +92,7 @@ class Language_Glsl extends Language_t
 	}
 };
 
-class Language_CComments extends Language_t
+export class Language_CComments extends Language_t
 {
 	GetOpenSectionSymbols()
 	{
@@ -122,6 +123,7 @@ class Language_CComments extends Language_t
 		return false;
 	}
 };
+
 
 /*
 	this now splits the source into a tree of sections, based on the language policy
@@ -241,7 +243,6 @@ function SplitSections(Source,Language)
 			if ( !Language.IsOpenTokenAllowedPrefix(Section.OpenToken) )
 			{
 				const ReinsertMe = Section.Prefix;
-				console.log(ReinsertMe,SectionStack[SectionStack.length-1]);
 				ReinsertedSource = ReinsertMe;
 				Section.Prefix = '';
 			}
@@ -358,7 +359,7 @@ export function StripComments(Source)
 }
 
 
-export default function Parse(Source)
+export function ParseGlsl(Source)
 {
 	const Language = new Language_Glsl;
 	const SectionTree = SplitSections(Source,Language);
@@ -366,3 +367,4 @@ export default function Parse(Source)
 	return SectionTree;
 }
 
+export default ParseGlsl;
