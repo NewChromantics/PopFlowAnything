@@ -8,9 +8,11 @@ function EscapeRegexSymbol(Symbol)
 
 export default class Language_t
 {
-	GetOpenSectionSymbolsPattern()
+	GetOpenSectionSymbolsPattern(ParentOpeningSymbol)
 	{
-		let Symbols = this.GetOpenSectionSymbols();
+		let Symbols = this.GetOpenSectionSymbols(...arguments);
+		if ( !Symbols.length )
+			return null;
 		Symbols = Symbols.map(EscapeRegexSymbol);
 		const Pattern = Symbols.join('|');
 		return Pattern;
@@ -25,12 +27,6 @@ export default class Language_t
 	}
 	
 	AllowEofSection()
-	{
-		return false;
-	}
-	
-	//	when this section is open, we ignore all others
-	IsOpenTokenExclusive(OpenToken)
 	{
 		return false;
 	}
@@ -55,9 +51,42 @@ export class Language_Glsl extends Language_t
 		return '[a-zA-Z0-9_;]+';
 	}
 	
-	GetOpenSectionSymbols()
+	GetOpenSectionSymbols(ParentOpeningSymbol)
 	{
-		return [';','{','/*','//','#'];
+		//	nothing opens inside comment block
+		if ( ParentOpeningSymbol == '/*' )
+			return [];
+		//	gr: do we allow /* after // ?
+		if ( ParentOpeningSymbol == '//' )
+			return [];
+		
+		let OpenSections = [';','{','/*','//','#'];
+
+		//	only evaluate () inside a single line
+		if ( ParentOpeningSymbol == ';' )
+		{
+			OpenSections.push('(');
+		}
+		
+		return OpenSections;
+	}
+	
+	GetOperators()
+	{
+		//	todo: map operators to function names?
+		const Operators = 
+		[
+			//	right or left only?
+			//'.',	//	split every . for swizzling
+			//'!'
+			
+			//	left & right side operators
+			'=',
+			'+=','-=','/=','*=','!=',
+			'+','-','/','*',
+			'&&','||',
+		];
+		return Operators;
 	}
 	
 	GetCloseSymbol(OpeningSymbol)
@@ -68,20 +97,11 @@ export class Language_Glsl extends Language_t
 		CloseSymbols['//'] = '\n';
 		CloseSymbols['{'] = '}';	//	maybe this function should return a pattern so we can do };? here for optional ;
 		CloseSymbols['#'] = '\n';	//	maybe this function should return a pattern so we can do };? here for optional ;
+		CloseSymbols['('] = ')';
 		
 		return CloseSymbols[OpeningSymbol];
 	}
 	
-	IsOpenTokenExclusive(OpenToken)
-	{
-		switch(OpenToken)
-		{
-			case '/*':
-			case '//':
-				return true;
-		}
-		return false;
-	}
 	
 	IsOpenTokenAllowedPrefix(OpenToken)
 	{
@@ -124,14 +144,4 @@ export class Language_CComments extends Language_t
 		return true;
 	}
 	
-	IsOpenTokenExclusive(OpenToken)
-	{
-		switch(OpenToken)
-		{
-			case '/*':
-			case '//':
-				return true;
-		}
-		return false;
-	}
 };

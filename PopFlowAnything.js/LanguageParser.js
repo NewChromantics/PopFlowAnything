@@ -42,13 +42,14 @@ function SplitSections(Source,Language)
 		const TailSource = WasReinsertedSource + OriginalSource.slice(SourcePos);
 		ReinsertedSource = '';
 		
-		const OpenSectionKeywords = Language.GetOpenSectionSymbolsPattern();
-		const OpenPattern = `(${OpenSectionKeywords})`;
-		const OpenRegex = RegExp(OpenPattern,'g');	//	use 'g'lobal so we can find out where this string ended
-		let OpenMatch = OpenRegex.exec(TailSource);
+		const PendingSection = SectionStack.length ? SectionStack[SectionStack.length-1] : null;
+
+		const OpenSectionKeywords = Language.GetOpenSectionSymbolsPattern( PendingSection ? PendingSection.OpenToken : null );
+		const OpenPattern = OpenSectionKeywords ? `(${OpenSectionKeywords})` : null;
+		const OpenRegex = OpenPattern ? RegExp(OpenPattern,'g') : null;	//	use 'g'lobal so we can find out where this string ended
+		let OpenMatch = OpenRegex ? OpenRegex.exec(TailSource) : null;
 		
 		//	make & match a close section if something is waiting to close
-		const PendingSection = SectionStack.length ? SectionStack[SectionStack.length-1] : null;
 		const ClosePattern = PendingSection ? Language.GetCloseSymbolPattern(PendingSection.OpenToken) : null;
 		const CloseRegex = ClosePattern ? RegExp(`(${ClosePattern})`,'g') : null;
 		let CloseMatch = CloseRegex ? CloseRegex.exec(TailSource) : null;
@@ -56,21 +57,12 @@ function SplitSections(Source,Language)
 		//	pick whichever came first
 		if ( OpenMatch && CloseMatch )
 		{
-			//	if the pending open is exclusive, ignore new opening
-			//	todo: this is where we may need priority of exclusivity
-			if ( Language.IsOpenTokenExclusive(PendingSection.OpenToken) )
-			{
-				OpenMatch = null;
-			}
+			if ( OpenMatch.index == CloseMatch.index )
+				throw `Close and open matches at same position! ${TailSource.slice(OpenMatch.index,10)}`;
+			if ( OpenMatch.index < CloseMatch.index )
+				CloseMatch = null;
 			else
-			{
-				if ( OpenMatch.index == CloseMatch.index )
-					throw `Close and open matches at same position! ${TailSource.slice(OpenMatch.index,10)}`;
-				if ( OpenMatch.index < CloseMatch.index )
-					CloseMatch = null;
-				else
-					OpenMatch = null;
-			}
+				OpenMatch = null;
 		}
 
 		//	found another opening before a close
@@ -90,6 +82,7 @@ function SplitSections(Source,Language)
 				//Section.OpenToken = OpenToken;
 				Section.CloseToken = OpenToken;
 				Sections.push(Section);
+				console.log(`Added ${Section.SectionContent}`);
 			
 				SourcePos += OpenRegex.lastIndex;
 				SourcePos -= WasReinsertedSource.length;
@@ -105,7 +98,8 @@ function SplitSections(Source,Language)
 			PendingSection.CloseToken = CloseToken;
 			PendingSection.Prefix = Content;	//	.trim?
 			SectionStack.push(PendingSection);
-			
+			console.log(`Pending ${PendingSection.OpenToken}`);
+		
 			SourcePos += OpenRegex.lastIndex;
 			SourcePos -= WasReinsertedSource.length;
 			continue;
@@ -135,6 +129,7 @@ function SplitSections(Source,Language)
 			Section.SectionContent = Section.SectionContent.trimEnd();
 			
 			Sections.push(Section);
+			console.log(`Added ${Section.OpenToken} ${Section.Prefix}`);
 			
 			SourcePos += CloseRegex.lastIndex;
 			SourcePos -= WasReinsertedSource.length;
