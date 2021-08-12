@@ -26,6 +26,17 @@ export default class Language_t
 		return EscapeRegexSymbol(CloseSymbol);
 	}
 	
+	GetOperatorSymbolsPattern(ParentOpeningSymbol)
+	{
+		let Symbols = this.GetOperatorSymbols(...arguments);
+		if ( !Symbols.length )
+			return null;
+		Symbols = Symbols.map(EscapeRegexSymbol);
+		const Pattern = Symbols.join('|');
+		return Pattern;
+	}
+	
+	
 	AllowEofSection()
 	{
 		return false;
@@ -66,33 +77,61 @@ export class Language_Glsl extends Language_t
 		let OpenSections = [';','{','/*','//','#'];
 
 		//	only evaluate () inside a single line
-		switch ( ParentOpeningSymbol )
+		//	or either side of an operator
+		const OperatorSymbols = this.GetOperatorSymbols(';');	//	get all
+		if ( OperatorSymbols.some( s => s==ParentOpeningSymbol ) )
 		{
-			case ';':
-			case '(':
-				OpenSections.push('(');
-				break;
+			OpenSections.push('(');
+		}
+		else
+		{
+			switch ( ParentOpeningSymbol )
+			{
+				case ';':
+				case '(':
+					OpenSections.push('(');
+					break;
+			}
 		}
 		
 		return OpenSections;
 	}
 	
-	GetOperators()
+	GetOperatorSymbols(ParentOpeningSymbol)
 	{
 		//	todo: map operators to function names?
 		const Operators = 
 		[
 			//	right or left only?
-			//'.',	//	split every . for swizzling
-			//'!'
+			//	'.',	//	split every . for swizzling
+			//	'!'
+			//	'return'
 			
 			//	left & right side operators
 			'=',
 			'+=','-=','/=','*=','!=',
 			'+','-','/','*',
-			'&&','||',
+			'&&','||','^','&','<<','>>',
+			
+			'return',
+			//',',
 		];
-		return Operators;
+
+		//	operators can have operators
+		if ( Operators.some( s => s==ParentOpeningSymbol ) )
+		{
+			return Operators;
+		}
+
+		switch ( ParentOpeningSymbol )
+		{
+			case ';':
+			case '(':
+				return Operators;
+				
+			default:
+				return [];
+		}
 	}
 	
 	GetCloseSymbol(OpeningSymbol)

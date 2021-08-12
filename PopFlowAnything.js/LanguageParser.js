@@ -49,6 +49,11 @@ function SplitSections(Source,Language,RootOpenToken=null,AllowEof=null,IdentCou
 			const JustText = Children.pop();
 			Section.SectionContent = JustText.SectionContent.trim();
 		}
+		else
+		{
+			//	children have replaced content?
+			delete Section.SectionContent;
+		}
 				
 		if ( Children.length )
 			Section.Children = Children;
@@ -78,7 +83,8 @@ function SplitSections(Source,Language,RootOpenToken=null,AllowEof=null,IdentCou
 		ReinsertedSource = '';
 		
 		const PendingSection = SectionStack.length ? SectionStack[SectionStack.length-1] : null;
-		const PendingOpenToken = PendingSection ? PendingSection.OpenToken : RootOpenToken;
+		const PendingOpenToken = PendingSection ? (PendingSection.OpenToken||PendingSection.OperatorToken) : RootOpenToken;
+		const PendingOperatorSection = (PendingSection && PendingSection.OperatorToken) ? PendingSection : null;
 
 		const OpenSectionKeywords = Language.GetOpenSectionSymbolsPattern( PendingOpenToken );
 		const OpenPattern = OpenSectionKeywords ? `(${OpenSectionKeywords})` : null;
@@ -87,20 +93,111 @@ function SplitSections(Source,Language,RootOpenToken=null,AllowEof=null,IdentCou
 		
 		//	make & match a close section if something is waiting to close
 		const ClosePattern = PendingSection ? Language.GetCloseSymbolPattern(PendingOpenToken) : null;
-		const CloseRegex = ClosePattern ? RegExp(`(${ClosePattern})`,'g') : null;
+		let CloseRegex = ClosePattern ? RegExp(`(${ClosePattern})`,'g') : null;
 		let CloseMatch = CloseRegex ? CloseRegex.exec(TailSource) : null;
 
-		//	pick whichever came first
-		if ( OpenMatch && CloseMatch )
-		{
-			if ( OpenMatch.index == CloseMatch.index )
-				throw `Close and open matches at same position! ${TailSource.slice(OpenMatch.index,10)}`;
-			if ( OpenMatch.index < CloseMatch.index )
-				CloseMatch = null;
-			else
-				OpenMatch = null;
-		}
+		//	gr: I tried to do operators as open sections like ; but too fiddly to fit
+		//		trying explicitly splitting stuff in half
+		const OperatorKeywords = Language.GetOperatorSymbolsPattern( PendingOpenToken );
+		const OperatorPattern = OperatorKeywords ? `(${OperatorKeywords})` : null;
+		const OperatorRegex = OperatorPattern ? RegExp(OperatorPattern,'g') : null;	//	use 'g'lobal so we can find out where this string ended
+		let OperatorMatch = OperatorRegex ? OperatorRegex.exec(TailSource) : null;
 
+		//	if we're in an operator, it can be closed, if we hit the close of the next non-operator's parent close
+		//	eg. ( A + B <here> )
+		let OperatorParentCloseRegex = null;
+		let OperatorParentCloseMatch = null;
+		if ( PendingOperatorSection )
+		{
+			const PendingNonOperators = SectionStack.filter( s => !s.OperatorToken );
+			const PendingOpenTokens = PendingNonOperators.map( Section => Section.OpenToken );
+			//	the root token, if there is one, could also be non-operator
+			//	gr: this might be an operator though?
+			if ( RootOpenToken )
+				PendingOpenTokens.unshift(RootOpenToken);
+			const PendingOperatorParentOpenToken = PendingOpenTokens.pop();
+			if ( PendingOperatorParentOpenToken )
+			{
+				const ParentClosePattern = Language.GetCloseSymbolPattern(PendingOperatorParentOpenToken);
+				OperatorParentCloseRegex = ParentClosePattern ? RegExp(`(${ParentClosePattern})`,'g') : null;
+				OperatorParentCloseMatch = OperatorParentCloseRegex ? OperatorParentCloseRegex.exec(TailSource) : null;
+			}
+		}
+		
+		
+		let Matches = [OpenMatch,CloseMatch,OperatorMatch,OperatorParentCloseMatch].filter( m => m!=null );
+		
+		//	hack for now
+		//	if we've reached EOF (no matches), but have a pending operator, we close up the operator
+		if ( Matches.length == 0 && PendingSection && PendingSection.OperatorToken )
+		{
+			console.log(`Auto closing operator at EOF`);
+			CloseMatch = {};
+			CloseMatch.index = TailSource.length;
+			Matches.push(CloseMatch);
+			
+			CloseRegex = {};
+			CloseRegex.lastIndex = TailSource.length;
+		}
+		
+		
+		//	this could be syntax error, or whitespace at the end
+		if ( Matches.length == 0 )
+		{
+			//	gr: should always error if we have an pending section?
+			if ( PendingSection )
+				throw `Syntax error, reached EOF ${TailSource} but we still have a ${PendingSection.OpenToken} section still open`;
+			
+			//	just whitespace, clip it
+			const TailWithoutWhitespace = TailSource.trim();
+			if ( TailWithoutWhitespace.length == 0 )
+				break;
+				
+			if ( !AllowEof )
+				throw `Syntax error, reached EOF ${TailSource} without matching section`;
+	
+			const Section = {};
+			Section.SectionContent = TailSource;
+			Section.Type = 'Eof';
+			Sections.push(Section);
+			break;
+		}
+		
+		//	pick whichever came first
+		function CompareIndex(a,b)
+		{	//	just do -1 and 1, if any indexes match... we may have a problem
+			return ( a.index < b.index ) ? -1 : 1;
+		}
+		Matches = Matches.sort( CompareIndex );
+		OpenMatch = (Matches[0] == OpenMatch) ? OpenMatch : null;
+		CloseMatch = (Matches[0] == CloseMatch) ? CloseMatch : null;
+		OperatorMatch = (Matches[0] == OperatorMatch) ? OperatorMatch : null;
+		
+		//	found operator, need to split left & right, but we want them as 2 children...
+		//	so push an operator, then wait for the end
+		//	but what is the end, this can only work inside a child section where we expect the operator to get left over?
+		if ( OperatorMatch )
+		{
+			const Content = TailSource.slice( 0, OperatorMatch.index );
+			const OperatorToken = OperatorMatch[1];
+			const CloseToken = Language.GetCloseSymbol(OperatorToken);
+			
+			//	has a close token, so add to the stack, and hopefully next iteration will find it
+			const PendingSection = {};
+			PendingSection.Ident = IdentCounter.GetNewSectionIdent();
+			PendingSection.ParentIdent = SectionStack.length ? SectionStack[SectionStack.length-1].Ident : null;
+			PendingSection.Operator_LastIndex = OperatorRegex.lastIndex;
+			PendingSection.OperatorToken = OperatorToken;
+			PendingSection.CloseToken = CloseToken;
+			PendingSection.Prefix = Content;	//	.trim?
+			SectionStack.push(PendingSection);
+		
+			SourcePos += OperatorRegex.lastIndex;
+			SourcePos -= WasReinsertedSource.length;
+			continue;
+		}
+		
+		
 		//	found another opening before a close
 		if ( OpenMatch )
 		{
@@ -113,7 +210,7 @@ function SplitSections(Source,Language,RootOpenToken=null,AllowEof=null,IdentCou
 			{
 				const Section = {};
 				Section.ParentIdent = SectionStack.length ? SectionStack[SectionStack.length-1].Ident : null;
-				Section.Ident = GetNewSectionIdent();
+				Section.Ident = IdentCounter.GetNewSectionIdent();
 				//Section.OpenToken = OpenToken;
 				Section.CloseToken = OpenToken;
 				ProcessPrefix(Section,Content,OpenToken);
@@ -126,7 +223,7 @@ function SplitSections(Source,Language,RootOpenToken=null,AllowEof=null,IdentCou
 			
 			//	has a close token, so add to the stack, and hopefully next iteration will find it
 			const PendingSection = {};
-			PendingSection.Ident = GetNewSectionIdent();
+			PendingSection.Ident = IdentCounter.GetNewSectionIdent();
 			PendingSection.ParentIdent = SectionStack.length ? SectionStack[SectionStack.length-1].Ident : null;
 			PendingSection.Open_LastIndex = OpenRegex.lastIndex;
 			PendingSection.OpenToken = OpenToken;
@@ -138,9 +235,16 @@ function SplitSections(Source,Language,RootOpenToken=null,AllowEof=null,IdentCou
 			SourcePos -= WasReinsertedSource.length;
 			continue;
 		}
+		
+		if ( OperatorParentCloseMatch )
+		{
+			//	close the current operator, but leave things in current state so we will re-process here until we hit the operator parent
+			//throw `Close operator`;
+			CloseMatch = OperatorParentCloseMatch;
+		}
 
 		//	found a close for the pending section
-		if ( CloseMatch )
+		if ( CloseMatch || OperatorParentCloseMatch )
 		{
 			const Section = SectionStack.pop();	//PendingSection;
 			delete Section.Open_LastIndex;		//	dont output this
@@ -162,36 +266,26 @@ function SplitSections(Source,Language,RootOpenToken=null,AllowEof=null,IdentCou
 			//	dont trim left in case the opening token doesnt allow whitespace (eg #define)
 			Section.SectionContent = Section.SectionContent.trimEnd();
 
-			ProcessPrefix(Section,Section.SectionContent,Section.OpenToken);
+			//	actual is processing suffix (at least, for operator)
+			const ParentToken = Section.OpenToken || Section.OperatorToken;
+			ProcessPrefix(Section,Section.SectionContent,ParentToken);
 			
 			
 			Sections.push(Section);
 			
-			SourcePos += CloseRegex.lastIndex;
-			SourcePos -= WasReinsertedSource.length;
+			if ( OperatorParentCloseMatch )
+			{
+				//	dont move source along, we need to re-process here
+				//	gr: need to move over the content up to the close, as that's swallowed into Section.SectionContent
+				SourcePos += CloseMatch.index;
+			}
+			else
+			{
+				SourcePos += CloseRegex.lastIndex;
+				SourcePos -= WasReinsertedSource.length;
+			}
 		}
 
-		//	this could be syntax error, or whitespace at the end
-		if ( !OpenMatch && !CloseMatch )
-		{
-			//	gr: should always error if we have an pending section?
-			if ( PendingSection )
-				throw `Syntax error, reached EOF ${TailSource} but we still have a ${PendingSection.OpenToken} section still open`;
-			
-			//	just whitespace, clip it
-			const TailWithoutWhitespace = TailSource.trim();
-			if ( TailWithoutWhitespace.length == 0 )
-				break;
-				
-			if ( !AllowEof )
-				throw `Syntax error, reached EOF ${TailSource} without matching section`;
-	
-			const Section = {};
-			Section.SectionContent = TailSource;
-			Section.Type = 'Eof';
-			Sections.push(Section);
-			break;
-		}
 	}
 	
 	if ( SectionStack.length )
@@ -273,6 +367,7 @@ export function ParseGlsl(Source)
 {
 	const Language = new Language_Glsl;
 	const SectionTree = SplitSections(Source,Language);
+	return SectionTree;
 	
 	const Evaluated = EvaluateSections(SectionTree);
 	Evaluated.Sections = SectionTree;
@@ -298,6 +393,7 @@ function EvaluateSections(SectionTree)
 	{
 		//	global symbols
 		if ( Section.CloseToken == ';' && !Section.OpenToken )
+		//if ( Section.CloseToken && !Section.OpenToken )
 		{
 			if ( Section.Children )
 			{
