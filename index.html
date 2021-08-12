@@ -76,7 +76,8 @@ canvas
 	
 	vec3 GetColour(vec2 uv)
 	{
-		float Blue = fract( (Time * 10.0) + 0.1 );
+		//	evaluate 1.2 -> 3.4
+		float Blue = fract( (Time * 1.2) + 3.4 );
 		return vec3( uv, Time );
 	}
 	

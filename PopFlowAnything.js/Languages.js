@@ -42,6 +42,8 @@ export default class Language_t
 	}
 }
 
+
+
 //	todo: inherit from Language_CComments
 export class Language_Glsl extends Language_t
 {
@@ -60,12 +62,16 @@ export class Language_Glsl extends Language_t
 		if ( ParentOpeningSymbol == '//' )
 			return [];
 		
+		//	; detects an end of section, then re-evaluates previous content
 		let OpenSections = [';','{','/*','//','#'];
 
 		//	only evaluate () inside a single line
-		if ( ParentOpeningSymbol == ';' )
+		switch ( ParentOpeningSymbol )
 		{
-			OpenSections.push('(');
+			case ';':
+			case '(':
+				OpenSections.push('(');
+				break;
 		}
 		
 		return OpenSections;

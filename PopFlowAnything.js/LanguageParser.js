@@ -4,10 +4,13 @@ import {Language_Glsl,Language_CComments} from './Languages.js'
 /*
 	this now splits the source into a tree of sections, based on the language policy
 */
-function SplitSections(Source,Language)
+function SplitSections(Source,Language,RootOpenToken=null,AllowEof=null)
 {
+	if ( AllowEof === null )
+		AllowEof = Language.AllowEofSection();
+		
 	//	maybe a better way to do this than just inserting code
-	Source += Language.GetBuiltInSections().join('\n');
+	//Source += Language.GetBuiltInSections().join('\n');
 
 	const OriginalSource = Source;
 	
@@ -19,6 +22,28 @@ function SplitSections(Source,Language)
 		LastSectionIdent++;
 		return LastSectionIdent;
 	}
+
+
+	function ProcessPrefix(Section,Content,OpenToken)
+	{
+		const AllowChildEof = true;	//	we want to capture if there were no children, ie. just a single statement with no ;
+		const Children = SplitSections( Content, Language, OpenToken, AllowChildEof );
+		
+		//	happens when content is ""	
+		if ( Children.length == 0 )
+		{
+			//throw `Should this ever have no children?`;
+		}
+		else if ( Children[Children.length-1].Type == 'Eof' )
+		{
+			const JustText = Children.pop();
+			Section.SectionContent = JustText.SectionContent.trim();
+		}
+				
+		if ( Children.length )
+			Section.Children = Children;
+	}
+
 
 	let SourcePos = 0;
 	
@@ -43,14 +68,15 @@ function SplitSections(Source,Language)
 		ReinsertedSource = '';
 		
 		const PendingSection = SectionStack.length ? SectionStack[SectionStack.length-1] : null;
+		const PendingOpenToken = PendingSection ? PendingSection.OpenToken : RootOpenToken;
 
-		const OpenSectionKeywords = Language.GetOpenSectionSymbolsPattern( PendingSection ? PendingSection.OpenToken : null );
+		const OpenSectionKeywords = Language.GetOpenSectionSymbolsPattern( PendingOpenToken );
 		const OpenPattern = OpenSectionKeywords ? `(${OpenSectionKeywords})` : null;
 		const OpenRegex = OpenPattern ? RegExp(OpenPattern,'g') : null;	//	use 'g'lobal so we can find out where this string ended
 		let OpenMatch = OpenRegex ? OpenRegex.exec(TailSource) : null;
 		
 		//	make & match a close section if something is waiting to close
-		const ClosePattern = PendingSection ? Language.GetCloseSymbolPattern(PendingSection.OpenToken) : null;
+		const ClosePattern = PendingSection ? Language.GetCloseSymbolPattern(PendingOpenToken) : null;
 		const CloseRegex = ClosePattern ? RegExp(`(${ClosePattern})`,'g') : null;
 		let CloseMatch = CloseRegex ? CloseRegex.exec(TailSource) : null;
 
@@ -78,11 +104,10 @@ function SplitSections(Source,Language)
 				const Section = {};
 				Section.ParentIdent = SectionStack.length ? SectionStack[SectionStack.length-1].Ident : null;
 				Section.Ident = GetNewSectionIdent();
-				Section.SectionContent = Content.trim();
 				//Section.OpenToken = OpenToken;
 				Section.CloseToken = OpenToken;
+				ProcessPrefix(Section,Content,OpenToken);
 				Sections.push(Section);
-				console.log(`Added ${Section.SectionContent}`);
 			
 				SourcePos += OpenRegex.lastIndex;
 				SourcePos -= WasReinsertedSource.length;
@@ -98,7 +123,6 @@ function SplitSections(Source,Language)
 			PendingSection.CloseToken = CloseToken;
 			PendingSection.Prefix = Content;	//	.trim?
 			SectionStack.push(PendingSection);
-			console.log(`Pending ${PendingSection.OpenToken}`);
 		
 			SourcePos += OpenRegex.lastIndex;
 			SourcePos -= WasReinsertedSource.length;
@@ -127,9 +151,11 @@ function SplitSections(Source,Language)
 			Section.SectionContent = TailSource.slice(0,CloseMatch.index);
 			//	dont trim left in case the opening token doesnt allow whitespace (eg #define)
 			Section.SectionContent = Section.SectionContent.trimEnd();
+
+			ProcessPrefix(Section,Section.SectionContent,Section.OpenToken);
+			
 			
 			Sections.push(Section);
-			console.log(`Added ${Section.OpenToken} ${Section.Prefix}`);
 			
 			SourcePos += CloseRegex.lastIndex;
 			SourcePos -= WasReinsertedSource.length;
@@ -147,7 +173,7 @@ function SplitSections(Source,Language)
 			if ( TailWithoutWhitespace.length == 0 )
 				break;
 				
-			if ( !Language.AllowEofSection() )
+			if ( !AllowEof )
 				throw `Syntax error, reached EOF ${TailSource} without matching section`;
 	
 			const Section = {};
@@ -263,40 +289,71 @@ function EvaluateSections(SectionTree)
 		//	global symbols
 		if ( Section.CloseToken == ';' && !Section.OpenToken )
 		{
-			const Declaration = Section.SectionContent.trim();
-			//	just whitespace before ;
-			if ( !Declaration.length )
-				continue;
+			if ( Section.Children )
+			{
+				//	declaration, but has some functions to get to that declaration
+				const DeclarationWithFunction = {};
+				DeclarationWithFunction.Declaration = Section.Children[0].Prefix;
+			
+				const FunctionEvaluation = EvaluateSections( Section.Children );
+				Object.assign(DeclarationWithFunction,FunctionEvaluation);
+			
+				GlobalDeclarations.push( DeclarationWithFunction );
+			}
+			else
+			{
+				const Declaration = (Section.SectionContent||Section.Prefix||'').trim();
+				//	just whitespace before ;
+				if ( !Declaration.length )
+					continue;
 
-			//	todo: determine if this is a ...
-			//	function declaration
-			//	variable
-			//	operator (dog.x += cat.y) <-- function
-			GlobalDeclarations.push( Declaration );
+				GlobalDeclarations.push( Declaration );
+			}
 		}
 		//	function definition
 		else if ( Section.OpenToken == '{' && Section.CloseToken == '}' )
 		{
 			//	prefix is symbol, like void main(x)
 			const Function = {};
-			Function.Declaration = Section.Prefix;
+			Function.Routine = Section.Prefix;
 			
 			//	recurse into children
 			const FunctionEvaluation = EvaluateSections( Section.Children );
-			Function.Content = FunctionEvaluation;
+			Object.assign(Function,FunctionEvaluation);
+			
+			GlobalFunctions.push( Function );
+		}
+		else if ( Section.OpenToken == '(' )
+		{
+			//	prefix is symbol, like void main(x)
+			const Function = {};
+			if ( Section.Prefix.length )
+			{
+				//Function.Declaration = Section.Prefix;
+			}
+			
+			//	recurse into children
+			const FunctionEvaluation = EvaluateSections( Section.Children );
+			Object.assign(Function,FunctionEvaluation);
+			
+			Function.Functions = Function.Functions || [];
+			Function.Functions.push(Section.SectionContent);
 			
 			GlobalFunctions.push( Function );
 		}
 		else
 		{
+			console.log(`skipped ${Section.OpenToken}`);
 			//	comment
 			//	macro
 		}
 	}
 	
 	const Output = {};
-	Output.Declarations = GlobalDeclarations;
-	Output.Functions = GlobalFunctions;
+	if ( GlobalDeclarations.length )
+		Output.Declarations = GlobalDeclarations;
+	if ( GlobalFunctions.length )
+		Output.Functions = GlobalFunctions;
 	return Output;
 }
 
