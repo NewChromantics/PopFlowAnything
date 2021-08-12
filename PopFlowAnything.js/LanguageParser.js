@@ -329,7 +329,7 @@ function EvaluateSections(SectionTree)
 			const Function = {};
 			if ( Section.Prefix.length )
 			{
-				//Function.Declaration = Section.Prefix;
+				Function.Call = Section.Prefix;
 			}
 			
 			//	recurse into children
