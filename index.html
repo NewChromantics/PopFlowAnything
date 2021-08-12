@@ -74,15 +74,15 @@ canvas
 	varying vec2 uv;
 	uniform float Time;
 	
-	vec3 GetColour()
+	vec3 GetColour(vec2 uv)
 	{
-		float Blue = fract( Time * 10.0 );
+		float Blue = fract( (Time * 10.0) + 0.1 );
 		return vec3( uv, Time );
 	}
 	
 	void main()
 	{
-		vec3 Colour = GetColour();
+		vec3 Colour = GetColour(uv);
 		gl_fragcolor.xyz = Colour;
 		gl_fragcolor.w = 1.0;
 	}
