@@ -68,47 +68,27 @@ canvas
 <div id="Layout">
 <!-- look into prism for auto highlighting https://css-tricks.com/creating-an-editable-textarea-that-supports-syntax-highlighted-code/ -->
 	<textarea id="Source">
-	#define X macro!
-	# macro with space should have whitespace in content for later errors
-
-	One Symbol /* no longer broken in two */, todo: comment should be child;
+	//	some basic GLSL frag to test
+	#version 100
+	precision highp float;
+	varying vec2 uv;
+	uniform float Time;
 	
-	Stuff before # keywords/key symbols should split sections
-	
-	something;
-	/* 
-		comment 
-	*/
-	
-	#define Macro should encapsulate function(){}; /* and comment? */
+	vec3 GetColour()
+	{
+		float Blue = fract( Time * 10.0 );
+		return vec3( uv, Time );
+	}
 	
 	void main()
 	{
-		// make sure we can have scope inside scope
-		{
-			float InsideScope;
-		}
-		var InsideMain // no ; means this is a comment with a prefix, which we should fail on later
+		vec3 Colour = GetColour();
+		gl_fragcolor.xyz = Colour;
+		gl_fragcolor.w = 1.0;
 	}
-	
-	vec4 MyFunction()
-	{
-		/* comment with } inside func */
-		// this comment should extract now
-		float Hello;
-	}
-	
-	Function(Should encapsulate vars for now) {};
-	
-	/* this_symbol_should_be_ignored_in_comment;
-	*/
-
-	function Hello(/* comment inside prefix of section */){};
-
-	/* /* /* /* this shouldnt error as it should just be ignored */
-	End;
 	
 	</textarea>
+
 	
 	<div id="Graph"></div>
 
@@ -149,6 +129,50 @@ Source.onchange = OnSourceChangedEvent;
 Source.oninput = OnSourceChangedEvent;
 OnSourceElementChanged(Source);
 
+
+
+//	for later
+const UnitTestSource = `
+	#define X macro!
+	# macro with space should have whitespace in content for later errors
+
+	One Symbol /* no longer broken in two */, todo: comment should be child;
+	
+	Stuff before # keywords/key symbols should split sections
+	
+	something;
+	/* 
+		comment 
+	*/
+	
+	#define Macro should encapsulate function(){}; /* and comment? */
+	
+	void main()
+	{
+		// make sure we can have scope inside scope
+		{
+			float InsideScope;
+		}
+		var InsideMain // no ; means this is a comment with a prefix, which we should fail on later
+	}
+	
+	vec4 MyFunction()
+	{
+		/* comment with } inside func */
+		// this comment should extract now
+		float Hello;
+	}
+	
+	Function(Should encapsulate vars for now) {};
+	
+	/* this_symbol_should_be_ignored_in_comment;
+	*/
+
+	function Hello(/* comment inside prefix of section */){};
+
+	/* /* /* /* this shouldnt error as it should just be ignored */
+	End;
+`;
 
 </script>
 
