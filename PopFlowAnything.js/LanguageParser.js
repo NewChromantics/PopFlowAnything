@@ -6,6 +6,9 @@ import {Language_Glsl,Language_CComments} from './Languages.js'
 */
 function SplitSections(Source,Language)
 {
+	//	maybe a better way to do this than just inserting code
+	Source += Language.GetBuiltInSections().join('\n');
+
 	const OriginalSource = Source;
 	
 	const Sections = [];

@@ -39,6 +39,11 @@ export default class Language_t
 	{
 		return true;
 	}
+	
+	GetBuiltInSections()
+	{
+		return [];
+	}
 }
 
 //	todo: inherit from Language_CComments
@@ -88,6 +93,14 @@ export class Language_Glsl extends Language_t
 				return false;
 		}
 		return true;
+	}
+	
+	GetBuiltInSections()
+	{
+		const Builtins = [
+		`out vec4 gl_fragcolor;`
+		];
+		return Builtins;
 	}
 };
 
