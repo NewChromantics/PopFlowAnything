@@ -1,13 +1,30 @@
 import {Language_Glsl,Language_CComments} from './Languages.js'
 
 
+class IdentCounter_t
+{
+	constructor()
+	{
+		this.LastSectionIdent = 1000;
+	}
+	
+	GetNewSectionIdent()
+	{
+		this.LastSectionIdent++;
+		return this.LastSectionIdent;
+	}
+}
+
+
 /*
 	this now splits the source into a tree of sections, based on the language policy
 */
-function SplitSections(Source,Language,RootOpenToken=null,AllowEof=null)
+function SplitSections(Source,Language,RootOpenToken=null,AllowEof=null,IdentCounter)
 {
 	if ( AllowEof === null )
 		AllowEof = Language.AllowEofSection();
+	if ( !IdentCounter )
+		IdentCounter = new IdentCounter_t;
 		
 	//	maybe a better way to do this than just inserting code
 	//Source += Language.GetBuiltInSections().join('\n');
@@ -16,18 +33,11 @@ function SplitSections(Source,Language,RootOpenToken=null,AllowEof=null)
 	
 	const Sections = [];
 
-	let LastSectionIdent = 1000;
-	function GetNewSectionIdent()
-	{
-		LastSectionIdent++;
-		return LastSectionIdent;
-	}
-
 
 	function ProcessPrefix(Section,Content,OpenToken)
 	{
 		const AllowChildEof = true;	//	we want to capture if there were no children, ie. just a single statement with no ;
-		const Children = SplitSections( Content, Language, OpenToken, AllowChildEof );
+		const Children = SplitSections( Content, Language, OpenToken, AllowChildEof, IdentCounter );
 		
 		//	happens when content is ""	
 		if ( Children.length == 0 )
@@ -251,7 +261,7 @@ export function StripComments(Source)
 		return CommentSection.Prefix;
 	}
 
-	const CommentedSections = SplitSections( Source, new Language_CComments );
+	const CommentedSections = SplitSections( Source, new Language_CComments, IdentCounter );
 	
 	const SourceSections = CommentedSections.map( GetSourceFromSection );
 	const NoCommentSource = SourceSections.join('\n');
