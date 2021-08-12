@@ -106,8 +106,8 @@ function OnSourceElementChanged(Element)
 	try
 	{
 		//	test comment-stripping
-		const NewSource = StripComments(Source);
-		Graph.textContent = NewSource;
+		//const NewSource = StripComments(Source);
+		//Graph.textContent = NewSource;
 
 		const Tokenised = ParseGlsl(Source);
 		Graph.textContent = JSON.stringify(Tokenised,null,'\t');
