@@ -244,11 +244,14 @@ export function ParseGlsl(Source)
 	const SectionTree = SplitSections(Source,Language);
 	
 	const Evaluated = EvaluateSections(SectionTree);
+	Evaluated.Sections = SectionTree;
 	return Evaluated;
 }
 
 function EvaluateSections(SectionTree)
 {
+	SectionTree = SectionTree || [];
+	
 	//	the root nodes are either globals or functions
 	//	we should collect all the global symbols together
 	//	and all the functions
@@ -257,7 +260,7 @@ function EvaluateSections(SectionTree)
 	//	and thats the only thread we're interested in
 	
 	//	a lot of this might be language specific?
-	const GlobalSymbols = [];
+	const GlobalDeclarations = [];
 	const GlobalFunctions = [];
 	
 	for ( let Section of SectionTree )
@@ -274,13 +277,20 @@ function EvaluateSections(SectionTree)
 			//	function declaration
 			//	variable
 			//	operator (dog.x += cat.y) <-- function
-			GlobalSymbols.push( Declaration );
+			GlobalDeclarations.push( Declaration );
 		}
 		//	function definition
 		else if ( Section.OpenToken == '{' && Section.CloseToken == '}' )
 		{
 			//	prefix is symbol, like void main(x)
-			GlobalFunctions.push( Section.Prefix );
+			const Function = {};
+			Function.Declaration = Section.Prefix;
+			
+			//	recurse into children
+			const FunctionEvaluation = EvaluateSections( Section.Children );
+			Function.Content = FunctionEvaluation;
+			
+			GlobalFunctions.push( Function );
 		}
 		else
 		{
@@ -290,9 +300,8 @@ function EvaluateSections(SectionTree)
 	}
 	
 	const Output = {};
-	Output.GlobalSymbols = GlobalSymbols;
-	Output.GlobalFunctions = GlobalFunctions;
-	Output.Sections = SectionTree;
+	Output.Declarations = GlobalDeclarations;
+	Output.Functions = GlobalFunctions;
 	return Output;
 }
 
