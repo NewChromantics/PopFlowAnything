@@ -243,7 +243,60 @@ export function ParseGlsl(Source)
 	const Language = new Language_Glsl;
 	const SectionTree = SplitSections(Source,Language);
 	
-	return SectionTree;
+	const Evaluated = EvaluateSections(SectionTree);
+	return Evaluated;
 }
+
+function EvaluateSections(SectionTree)
+{
+	//	the root nodes are either globals or functions
+	//	we should collect all the global symbols together
+	//	and all the functions
+	//	then run through each function to work out a "thread"
+	//	then really need to have an entrypoint (eg. main)
+	//	and thats the only thread we're interested in
+	
+	//	a lot of this might be language specific?
+	const GlobalSymbols = [];
+	const GlobalFunctions = [];
+	
+	for ( let Section of SectionTree )
+	{
+		//	global symbols
+		if ( Section.CloseToken == ';' && !Section.OpenToken )
+		{
+			const Declaration = Section.SectionContent.trim();
+			//	just whitespace before ;
+			if ( !Declaration.length )
+				continue;
+
+			//	todo: determine if this is a ...
+			//	function declaration
+			//	variable
+			//	operator (dog.x += cat.y) <-- function
+			GlobalSymbols.push( Declaration );
+		}
+		//	function definition
+		else if ( Section.OpenToken == '{' && Section.CloseToken == '}' )
+		{
+			//	prefix is symbol, like void main(x)
+			GlobalFunctions.push( Section.Prefix );
+		}
+		else
+		{
+			//	comment
+			//	macro
+		}
+	}
+	
+	const Output = {};
+	Output.GlobalSymbols = GlobalSymbols;
+	Output.GlobalFunctions = GlobalFunctions;
+	Output.Sections = SectionTree;
+	return Output;
+}
+
+
+
 
 export default ParseGlsl;
