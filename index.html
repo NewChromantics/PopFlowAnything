@@ -78,7 +78,7 @@ canvas
 	{
 		//	evaluate 1.2 -> 3.4
 		float Blue = fract( (mod(Time) * 1.2) + 3.4 );
-		return vec3( uv, Time );
+		return vec3( uv.x, Time, Blue );
 	}
 	
 	void main()
@@ -111,7 +111,10 @@ function OnSourceElementChanged(Element)
 		//Graph.textContent = NewSource;
 
 		const Tokenised = ParseGlsl(Source);
-		Graph.textContent = JSON.stringify(Tokenised,null,'\t');
+		if ( typeof Tokenised == typeof '' )
+			Graph.textContent = Tokenised;
+		else
+			Graph.textContent = JSON.stringify(Tokenised,null,'\t');
 	}
 	catch(e)
 	{

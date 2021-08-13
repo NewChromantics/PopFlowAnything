@@ -366,13 +366,274 @@ export function StripComments(Source)
 export function ParseGlsl(Source)
 {
 	const Language = new Language_Glsl;
-	const SectionTree = SplitSections(Source,Language);
+	let SectionTree = SplitSections(Source,Language);
+	SectionTree = SectionTree.map(ConvertSectionToType);
+	
+	function SectionFunctionsToCode(Section)
+	{
+		if ( Section instanceof SectionFunction_t )
+		{
+			let Code = SectionTreeToCode(SectionTree,Section.FunctionName);
+			Code = '\n\n' + Code.join('\n');
+			Code += '\n\n';
+			return Code;
+		}
+		//	otuput variable declarations
+		if ( Section instanceof SectionEmptyStatement_t )
+		{
+			return Section.SectionContent;
+		}
+	}
+	
+	//	rebuild code to show we can iterate through
+	let CodeSections = SectionTree.map(SectionFunctionsToCode);
+	CodeSections = CodeSections.filter( cs => cs!=null );
+	CodeSections = CodeSections.join('\n');
+	return CodeSections;
+	
+	const Output = {};
+	Output.Code = Code;
+	Output.Sections = SectionTree;
+	return Output;
+	
+	return Code;
 	return SectionTree;
 	
 	const Evaluated = EvaluateSections(SectionTree);
 	Evaluated.Sections = SectionTree;
 	return Evaluated;
 }
+
+
+class Section_t
+{
+	constructor(Section)
+	{
+		Object.assign(this,Section);
+	}
+	
+	get VariableName()
+	{
+		return `var_${this.Ident}`;
+	}
+	
+	get ConstName()
+	{
+		return `const_${this.Ident}`;
+	}
+}
+
+class SectionComment_t extends Section_t
+{
+	constructor(Section)
+	{
+		super(Section);
+	}
+	
+	static Match(Section)
+	{
+		return (Section.OpenToken == '//' || Section.OpenToken == '/*');
+	}	
+}
+
+class SectionOperator_t extends Section_t
+{
+	constructor(Section)
+	{
+		super(Section);
+	}
+	
+	static Match(Section)
+	{
+		return (Section.OperatorToken!=null);
+	}	
+}
+
+
+class SectionEmptyStatement_t extends Section_t
+{
+	constructor(Section)
+	{
+		super(Section);
+	}
+	
+	static Match(Section)
+	{
+		if ( Section.CloseToken == ';' )
+			if ( !Section.Children || Section.Children.length==0 )
+				return true;
+		return false;
+	}	
+}
+
+class SectionFunction_t extends Section_t
+{
+	constructor(Section)
+	{
+		super(Section);
+		
+		const PreSymbol = `[\\s\\S]*?`;
+		const Symbol = `[A-Za-z0-9_]+`
+		const OpenBracket = `\\(`;
+		const CloseBracket = `\\)`;
+		const Pattern = new RegExp(`(${PreSymbol})(${Symbol})${OpenBracket}(.*)${CloseBracket}`);
+		const FunctionMatch = Section.Prefix.match(Pattern);
+		this.ReturnTypes = FunctionMatch[1];
+		this.FunctionName = FunctionMatch[2];
+		this.Arguments = FunctionMatch[3];
+	}
+	
+	static Match(Section)
+	{
+		return (Section.OpenToken == '{');
+		const Pattern = `.*\((.*\)$`;
+		return Section.Prefix.match(Pattern);
+	}
+}
+
+function ConvertSectionToType(Section)
+{
+	if ( SectionFunction_t.Match(Section) )	return new SectionFunction_t(Section);
+	if ( SectionComment_t.Match(Section) )	return new SectionComment_t(Section);
+	if ( SectionOperator_t.Match(Section) )	return new SectionOperator_t(Section);
+	if ( SectionEmptyStatement_t.Match(Section) )	return new SectionEmptyStatement_t(Section);
+	return new Section_t(Section);
+}
+
+function SectionToCode(Section,PreviousOperatorVariable)
+{
+	//	walk through the tree and generate code
+	//	I think we need to work from leafs backwards... for now just go through it
+	//	every statement should output a variable containing the evaluated value?
+	
+	const CodeLines = [];
+	function PushCode(Statement)
+	{
+		CodeLines.push(Statement);
+	}
+
+	//	encapsulating code for code generation
+	if ( Section instanceof SectionFunction_t )
+	{
+		//PushCode(`${Section.Prefix} ${Section.OpenToken}`);
+		//	need to declare args as new scoped variables
+		//	todo: running scoped vars!
+		let Line = '';
+		Line += `${Section.VariableName} = ${Section.Arguments};`;
+		PushCode(Line);
+	}
+
+
+	let LastChildVariable = null;
+	let FirstChildVariable = null;
+	for ( let Child of Section.Children||[] )
+	{
+		Child = ConvertSectionToType(Child);
+	
+		if ( Child instanceof SectionComment_t )
+			continue;
+		
+		if ( Child instanceof SectionEmptyStatement_t )
+			continue;
+		
+		FirstChildVariable = FirstChildVariable || Child.VariableName;
+		const ChildLines = SectionToCode(Child,LastChildVariable);
+		//PushCode(`${Child.VariableName}=`);
+		
+		ChildLines.forEach(PushCode);
+		/*
+		if ( Child instanceof SectionOperator_t )
+		{
+			PushCode(`${LastChildVariable} ${Child.OperatorToken}`);
+		}
+		*/
+		//	this should only get set if this child was evaluated and outputs a variable (or const!)
+		LastChildVariable = Child.VariableName || Child.ConstName;
+	}
+
+	//	suffix code
+	if ( Section instanceof SectionOperator_t )
+	{
+		let Line = `${Section.VariableName} = `;
+		
+		//	section content is a literal... we should split that into its own variable
+		const LiteralVariableName = `${Section.ConstName}`;
+		if ( !LastChildVariable )
+		{
+			LastChildVariable = LiteralVariableName;
+			PushCode(`${LiteralVariableName} = ${Section.SectionContent}`);
+		}
+		let Left = PreviousOperatorVariable;
+		const Right = LastChildVariable;
+		
+		//	gr: for = operator, but also +=, return etc?
+		if ( !Left )
+		{
+			Left = Section.Prefix.length ? Section.Prefix : null;
+		}
+		
+		//	turn operators into functions
+		const OperatorFunctions = {};
+		OperatorFunctions['+'] = 'add';
+		OperatorFunctions['/'] = 'divide';
+		OperatorFunctions['*'] = 'multiply';
+		OperatorFunctions['-'] = 'subtract';
+		
+		if ( OperatorFunctions.hasOwnProperty(Section.OperatorToken) )
+		{
+			const OperatorFunction = OperatorFunctions[Section.OperatorToken];
+			Line += `${OperatorFunction}( ${Left}, ${Right} )`
+		}
+		else
+		{
+			if ( Left )
+			{
+				Line += `${Left} ${Section.OperatorToken} ${Right}`;
+			}
+			else	//	operator with no left side, +=, return, =
+			{
+				Line += `${Section.OperatorToken} ${Right}`;
+			}
+		}
+		PushCode(Line);
+	}
+	else if ( Section instanceof SectionFunction_t )
+	{
+		PushCode(`${Section.FunctionName}() returns ${LastChildVariable}`);
+		//PushCode(`${Section.CloseToken}`);
+	}
+	else
+	{
+		let Line = `${Section.VariableName} = `;
+		Line += Section.Prefix || '';
+		Line += Section.OpenToken||'';
+		Line += Section.OperatorToken||'';
+		Line += Section.SectionContent||'';
+		if ( LastChildVariable )
+			Line += ` ${LastChildVariable}`;
+		Line += Section.CloseToken||'';
+		//if ( FirstChildVariable )	Line += ` (FirstChildVariable=${FirstChildVariable})`;
+		//if ( LastChildVariable )	Line += ` (LastChildVariable=${LastChildVariable})`;
+		PushCode(Line);
+	}
+		
+	return CodeLines;
+}
+
+function SectionTreeToCode(SectionTree,EntryFunction)
+{
+	//	first find the entry section (which must be a global, so is a root node)
+	SectionTree = SectionTree.map(ConvertSectionToType);
+	
+	const EntrySection = SectionTree.find( s => s.FunctionName == EntryFunction );
+	if ( !EntrySection )
+		throw `Failed to find entry function ${EntryFunction}`;
+	
+	return SectionToCode(EntrySection);
+	
+	return SectionTree;
+}
+
 
 function EvaluateSections(SectionTree)
 {
