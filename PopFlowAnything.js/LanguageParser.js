@@ -255,11 +255,16 @@ function SplitSections(Source,Language,RootOpenToken=null,AllowEof=null,IdentCou
 			{
 				const ReinsertMe = Section.Prefix;
 				ReinsertedSource = ReinsertMe;
-				Section.Prefix = '';
+				Section.Prefix = null;
 			}
 			
-			//Section.Prefix = Content.trim();	//	whitespace or prefix for the section
-			Section.Prefix = Section.Prefix.trim();
+			if ( Section.Prefix )
+			{
+				Section.Prefix = Section.Prefix.trim();
+				if ( !Section.Prefix.length )
+					Section.Prefix = null;
+			}
+			
 			//Section.OpenToken = OpenToken;
 			//Section.CloseToken = CloseToken;
 			Section.SectionContent = TailSource.slice(0,CloseMatch.index);
