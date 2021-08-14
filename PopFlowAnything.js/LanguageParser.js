@@ -609,16 +609,70 @@ function ConvertSectionToType(Section)
 	return new Section_t(Section);
 }
 
-function SectionToCode(Section,PreviousOperatorVariable)
+
+class Node_t
 {
-	//	walk through the tree and generate code
-	//	I think we need to work from leafs backwards... for now just go through it
-	//	every statement should output a variable containing the evaluated value?
-	
-	const CodeLines = [];
-	function PushCode(Statement)
+}
+
+//	variable declaration
+class NodeVariableDeclaration_t extends Node_t
+{
+	constructor(VariableName)
 	{
-		CodeLines.push(Statement);
+		super();
+		this.Output = VariableName;
+	}
+	
+	GetCode()
+	{
+		return ``;
+		return `var ${this.Output};`;
+	}
+}
+
+//	set variable to variable
+class NodeVariableSet_t extends Node_t
+{
+	constructor(VariableName,RightVariable)
+	{
+		super();
+		this.Input = RightVariable;
+		this.Output = VariableName;
+	}
+	
+	GetCode()
+	{
+		return `${this.Output} = ${this.Input};`;
+	}
+}
+
+//	function call
+class NodeFunctionCall_t extends Node_t
+{
+	constructor(FunctionName,Arguments,OutputVariableName)
+	{
+		super();
+		this.FunctionName = FunctionName;
+		this.Arguments = Arguments;
+		this.Output = OutputVariableName;
+	}
+		
+	GetCode()
+	{
+		return `${this.Output} = ${this.FunctionName}( ${this.Arguments} );`;
+	}
+}
+
+
+
+function SectionToFlowNodes(Section,PreviousOperatorVariable)
+{
+	const Nodes = [];
+	function PushNode(Node)
+	{
+		if ( Node instanceof NodeVariableDeclaration_t )
+			return;
+		Nodes.push(Node);
 	}
 
 	//	encapsulating code for code generation
@@ -627,9 +681,15 @@ function SectionToCode(Section,PreviousOperatorVariable)
 		//PushCode(`${Section.Prefix} ${Section.OpenToken}`);
 		//	need to declare args as new scoped variables
 		//	todo: running scoped vars!
-		let Line = '';
-		Line += `${Section.VariableName} = ${Section.Arguments};`;
-		PushCode(Line);
+		//	todo: split args, multiple vars
+		for ( let Argument of Section.Arguments )
+		{
+			const VariableName = Section.GetArgumentVariableName(Argument);
+			PushNode( new NodeVariableDeclaration_t(VariableName) );
+			PushNode( new NodeVariableSet_t( VariableName, Argument ) );
+		}
+		//let Line = `${Section.VariableName} = ${Section.Arguments};`;
+		//PushCode(Line);
 	}
 
 
@@ -646,10 +706,10 @@ function SectionToCode(Section,PreviousOperatorVariable)
 			continue;
 		
 		FirstChildVariable = FirstChildVariable || Child.VariableName;
-		const ChildLines = SectionToCode(Child,LastChildVariable);
+		const ChildNodes = SectionToFlowNodes( Child, LastChildVariable );
 		//PushCode(`${Child.VariableName}=`);
 		
-		ChildLines.forEach(PushCode);
+		ChildNodes.forEach( PushNode );
 		/*
 		if ( Child instanceof SectionOperator_t )
 		{
@@ -668,7 +728,9 @@ function SectionToCode(Section,PreviousOperatorVariable)
 		if ( !LastChildVariable )
 		{
 			LastChildVariable = LiteralVariableName;
-			PushCode(`${LiteralVariableName} = ${Section.SectionContent}`);
+			PushNode( new NodeVariableDeclaration_t( LiteralVariableName ) );
+			PushNode( new NodeVariableSet_t( LiteralVariableName, Section.SectionContent ) );
+			//PushCode(`${LiteralVariableName} = ${Section.SectionContent}`);
 		}
 		
 		let Left;
@@ -680,23 +742,45 @@ function SectionToCode(Section,PreviousOperatorVariable)
 		}
 		else
 		{
-			//	shouldn't be empty
+			//	shouldn't be empty if this is an operator
 			Left = PreviousOperatorVariable;
 		}
 		
 		const OperatorFunction = Section.OperatorFunction;
+		const FunctionArguments = [Left,Right];
 		
-		let Line = `${Section.VariableName} = `;
-		Line += `${OperatorFunction}( ${Left}, ${Right} )`
-		PushCode(Line);
+		PushNode( new NodeFunctionCall_t( OperatorFunction, FunctionArguments, Section.VariableName ) );
+		
+		//let Line = `${Section.VariableName} = `;
+		//Line += `${OperatorFunction}( ${Left}, ${Right} )`
+		//PushCode(Line);
 	}
 	else if ( Section instanceof SectionFunction_t )
 	{
-		PushCode(`${Section.FunctionName}() returns ${LastChildVariable}`);
-		//PushCode(`${Section.CloseToken}`);
+		//	here, we've reached the end of the functin, all child statements ran, and last in the statements
+		//	is the output
+		//	todo: the last should be a return operator!
+		//PushCode(`${Section.FunctionName}() returns ${LastChildVariable}`);
+		PushNode( new NodeVariableDeclaration_t( Section.VariableName ) );
+		PushNode( new NodeVariableSet_t( Section.VariableName, LastChildVariable ) );
+	}
+	else if ( Section instanceof SectionCall_t )
+	{
+		PushNode( new NodeVariableDeclaration_t( Section.VariableName ) );
+		if ( LastChildVariable )
+			PushNode( new NodeFunctionCall_t( Section.Prefix, LastChildVariable, Section.VariableName ) );
+		else
+			PushNode( new NodeFunctionCall_t( Section.Prefix, Section.SectionContent, Section.VariableName ) );
+	}
+	else if ( Section instanceof SectionStatement_t || Section instanceof SectionScoping_t )
+	{
+		//	children have all executed, resulting a variable
+		PushNode( new NodeVariableDeclaration_t( Section.VariableName ) );
+		PushNode( new NodeVariableSet_t( Section.VariableName, LastChildVariable ) );
 	}
 	else
 	{
+		throw `What is this`;
 		let Line = `${Section.VariableName} = `;
 		Line += Section.Prefix || '';
 		Line += Section.OpenToken||'';
@@ -710,8 +794,9 @@ function SectionToCode(Section,PreviousOperatorVariable)
 		PushCode(Line);
 	}
 		
-	return CodeLines;
+	return Nodes;
 }
+
 
 function SectionTreeToCode(SectionTree,EntryFunction)
 {
@@ -722,9 +807,9 @@ function SectionTreeToCode(SectionTree,EntryFunction)
 	if ( !EntrySection )
 		throw `Failed to find entry function ${EntryFunction}`;
 	
-	return SectionToCode(EntrySection);
-	
-	return SectionTree;
+	const Nodes = SectionToFlowNodes(EntrySection);
+	const CodeLines = Nodes.map( n => `${n.GetCode()}\t\t\t// ${n.constructor.name}` );
+	return CodeLines;
 }
 
 
