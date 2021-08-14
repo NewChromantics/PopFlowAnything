@@ -424,6 +424,24 @@ class Section_t
 	}
 }
 
+class SectionCall_t extends Section_t
+{
+	constructor(Section)
+	{
+		super(Section);
+	}
+	
+	static Match(Section)
+	{
+		if ( Section.OpenToken != '(' )
+			return false;
+		//	must have function name
+		if ( !Section.Prefix )
+			return false;
+		return true;
+	}	
+}
+
 class SectionComment_t extends Section_t
 {
 	constructor(Section)
@@ -462,7 +480,7 @@ class SectionAssignmentOperator_t extends SectionOperator_t
 	{
 		if ( this.OperatorToken == 'return' )
 			return this.OperatorToken;
-		return `var ${this.Prefix}`;
+		return `var_${this.Prefix}`;
 	}
 	
 	static Match(Section)
@@ -472,7 +490,44 @@ class SectionAssignmentOperator_t extends SectionOperator_t
 		//	if two children, left and right, then not assignment
 		if ( Section.OperatorToken == 'return' )
 			return true;
-		if ( (Section.Prefix||'').length == 0 )
+		if ( !Section.Prefix )
+			return false;
+		return true;
+	}	
+}
+
+
+class SectionStatement_t extends Section_t
+{
+	constructor(Section)
+	{
+		super(Section);
+	}
+	
+	static Match(Section)
+	{
+		if ( Section.CloseToken != ';' )
+			return false;
+		if ( !Section.Children || Section.Children.length == 0 )
+			return false;
+		return true;
+	}	
+}
+
+
+class SectionScoping_t extends Section_t
+{
+	constructor(Section)
+	{
+		super(Section);
+	}
+	
+	static Match(Section)
+	{
+		if ( Section.OpenToken != '(' )
+			return false;
+		//	no function name
+		if ( Section.Prefix )
 			return false;
 		return true;
 	}	
@@ -500,6 +555,13 @@ class SectionFunction_t extends Section_t
 	{
 		super(Section);
 		
+		function CleanArgument(Argument)
+		{
+			Argument = Argument.trim();
+			Argument = Argument.replace(' ','');
+			return Argument;
+		}
+		
 		const PreSymbol = `[\\s\\S]*?`;
 		const Symbol = `[A-Za-z0-9_]+`
 		const OpenBracket = `\\(`;
@@ -508,7 +570,18 @@ class SectionFunction_t extends Section_t
 		const FunctionMatch = Section.Prefix.match(Pattern);
 		this.ReturnTypes = FunctionMatch[1];
 		this.FunctionName = FunctionMatch[2];
-		this.Arguments = FunctionMatch[3];
+		this.Arguments = FunctionMatch[3].split(',');
+		this.Arguments = this.Arguments.map( CleanArgument );
+	}
+	
+	get VariableName()
+	{
+		return `var_${this.FunctionName}_return`;
+	}
+	
+	GetArgumentVariableName(ArgumentName)
+	{
+		return `var_${this.FunctionName}_${ArgumentName}`;
 	}
 	
 	static Match(Section)
@@ -521,10 +594,17 @@ class SectionFunction_t extends Section_t
 
 function ConvertSectionToType(Section)
 {
+	//	already converted
+	if ( Section instanceof Section_t )
+		return Section;
+		
 	if ( SectionFunction_t.Match(Section) )	return new SectionFunction_t(Section);
 	if ( SectionComment_t.Match(Section) )	return new SectionComment_t(Section);
+	if ( SectionCall_t.Match(Section) )		return new SectionCall_t(Section);
 	if ( SectionAssignmentOperator_t.Match(Section) )	return new SectionAssignmentOperator_t(Section);
 	if ( SectionOperator_t.Match(Section) )	return new SectionOperator_t(Section);
+	if ( SectionStatement_t.Match(Section) )	return new SectionStatement_t(Section);
+	if ( SectionScoping_t.Match(Section) )	return new SectionScoping_t(Section);	
 	if ( SectionEmptyStatement_t.Match(Section) )	return new SectionEmptyStatement_t(Section);
 	return new Section_t(Section);
 }
