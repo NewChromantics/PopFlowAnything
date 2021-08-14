@@ -16,26 +16,26 @@ body
 
 #Layout
 {
-	flex-grow:		1;
+	flex-grow:				1;
 	
-	display:		flex;
-	flex-direction: row;
+	display:				grid;
+	max-height:				80vh;
+	
+	grid-template-areas:	"Source Graph";
+	grid-template-columns:	50% 50%;
 }
-
-#Layout *
-{
-	flex-grow:	1;
-}
-
 
 textarea
 {
+	grid-area:		Source;
 	flex-grow:	3;
 	white-space: nowrap;
 	overflow: auto;
 	-moz-tab-size : 2;
 	-o-tab-size : 2;
 	tab-size : 2;
+	
+	overflow:	auto;
 }
 
 canvas
@@ -46,9 +46,10 @@ canvas
 
 #Graph
 {
+	grid-area:		Graph;
 	background:	#eee;
 	min-height:	10vh;
-	overflow:	hidden;
+	overflow:	scroll;
 	white-space: pre;
 }
 
