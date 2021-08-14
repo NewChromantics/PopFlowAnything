@@ -131,7 +131,6 @@ function SplitSections(Source,Language,RootOpenToken=null,AllowEof=null,IdentCou
 		//	if we've reached EOF (no matches), but have a pending operator, we close up the operator
 		if ( Matches.length == 0 && PendingSection && PendingSection.OperatorToken )
 		{
-			console.log(`Auto closing operator at EOF`);
 			CloseMatch = {};
 			CloseMatch.index = TailSource.length;
 			Matches.push(CloseMatch);
@@ -188,6 +187,7 @@ function SplitSections(Source,Language,RootOpenToken=null,AllowEof=null,IdentCou
 			PendingSection.ParentIdent = SectionStack.length ? SectionStack[SectionStack.length-1].Ident : null;
 			PendingSection.Operator_LastIndex = OperatorRegex.lastIndex;
 			PendingSection.OperatorToken = OperatorToken;
+			PendingSection.OperatorFunction = Language.GetOperatorFunction(OperatorToken);
 			PendingSection.CloseToken = CloseToken;
 			PendingSection.Prefix = Content;	//	.trim?
 			SectionStack.push(PendingSection);
@@ -442,25 +442,6 @@ class SectionOperator_t extends Section_t
 	static Match(Section)
 	{
 		return (Section.OperatorToken!=null);
-	}
-	
-	get OperatorFunction()
-	{
-		//	get from language parser
-		//	turn operators into functions
-		const OperatorFunctions = {};
-		OperatorFunctions['+'] = 'add';
-		OperatorFunctions['/'] = 'divide';
-		OperatorFunctions['*'] = 'multiply';
-		OperatorFunctions['-'] = 'subtract';
-		
-		OperatorFunctions['='] = 'getright';
-		OperatorFunctions['return'] = 'getright';
-		OperatorFunctions['+='] = 'add';
-		OperatorFunctions['/='] = 'divide';
-		OperatorFunctions['*='] = 'multiply';
-		OperatorFunctions['-='] = 'subtract';
-		return OperatorFunctions[this.OperatorToken];
 	}
 }
 

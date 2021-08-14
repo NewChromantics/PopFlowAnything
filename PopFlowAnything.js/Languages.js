@@ -36,6 +36,16 @@ export default class Language_t
 		return Pattern;
 	}
 	
+	GetOperatorFunctions()
+	{
+		return {};
+	}
+	
+	GetOperatorFunction(OperatorSymbol)
+	{
+		const OperatorFunctions = this.GetOperatorFunctions();
+		return OperatorFunctions[OperatorSymbol];
+	}
 	
 	AllowEofSection()
 	{
@@ -97,25 +107,40 @@ export class Language_Glsl extends Language_t
 		return OpenSections;
 	}
 	
+	GetOperatorFunctions()
+	{
+		//	gr: can we do . here for swizzling?
+		
+		const Operators = {};
+		Operators['+'] = 'Add';
+		Operators['/'] = 'Divide';
+		Operators['*'] = 'Multiply';
+		Operators['-'] = 'Subtract';
+		Operators['&&'] = 'And';
+		Operators['||'] = 'Or';
+		Operators['&'] = 'BitwiseAnd';
+		Operators['|'] = 'BitwiseOr';
+		Operators['!'] = 'NotRightValue'; 
+		Operators['<<'] = 'ShiftLeft'; 
+		Operators['>>'] = 'ShiftRight'; 
+
+		//	assignment operators, currently automatically works out left
+		Operators['='] = 'GetRightValue';
+		Operators['return'] = 'GetRightValue';
+		Operators['+='] = 'Add';
+		Operators['/='] = 'Divide';
+		Operators['*='] = 'Multiply';
+		Operators['-='] = 'Subtract';
+		Operators['!='] = 'Not';
+
+		return Operators;
+	}
+	
 	GetOperatorSymbols(ParentOpeningSymbol)
 	{
 		//	todo: map operators to function names?
-		const Operators = 
-		[
-			//	right or left only?
-			//	'.',	//	split every . for swizzling
-			//	'!'
-			//	'return'
-			
-			//	left & right side operators
-			'=',
-			'+=','-=','/=','*=','!=',
-			'+','-','/','*',
-			'&&','||','^','&','<<','>>',
-			
-			'return',
-			//',',
-		];
+		const OperatorFunctions = this.GetOperatorFunctions();
+		const Operators = Object.keys(OperatorFunctions);
 
 		//	operators can have operators
 		if ( Operators.some( s => s==ParentOpeningSymbol ) )
