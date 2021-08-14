@@ -398,10 +398,6 @@ export function ParseGlsl(Source)
 	
 	return Code;
 	return SectionTree;
-	
-	const Evaluated = EvaluateSections(SectionTree);
-	Evaluated.Sections = SectionTree;
-	return Evaluated;
 }
 
 
@@ -488,7 +484,6 @@ class SectionAssignmentOperator_t extends SectionOperator_t
 		if ( !super.Match(Section) )
 			return false;
 		//	if two children, left and right, then not assignment
-		console.log(`Is assignment operator? ${Section.Prefix} ${Section.OperatorToken}`,Section);
 		if ( Section.OperatorToken == 'return' )
 			return true;
 		if ( (Section.Prefix||'').length == 0 )
@@ -666,95 +661,6 @@ function SectionTreeToCode(SectionTree,EntryFunction)
 	return SectionTree;
 }
 
-
-function EvaluateSections(SectionTree)
-{
-	SectionTree = SectionTree || [];
-	
-	//	the root nodes are either globals or functions
-	//	we should collect all the global symbols together
-	//	and all the functions
-	//	then run through each function to work out a "thread"
-	//	then really need to have an entrypoint (eg. main)
-	//	and thats the only thread we're interested in
-	
-	//	a lot of this might be language specific?
-	const GlobalDeclarations = [];
-	const GlobalFunctions = [];
-	
-	for ( let Section of SectionTree )
-	{
-		//	global symbols
-		if ( Section.CloseToken == ';' && !Section.OpenToken )
-		//if ( Section.CloseToken && !Section.OpenToken )
-		{
-			if ( Section.Children )
-			{
-				//	declaration, but has some functions to get to that declaration
-				const DeclarationWithFunction = {};
-				DeclarationWithFunction.Declaration = Section.Children[0].Prefix;
-			
-				const FunctionEvaluation = EvaluateSections( Section.Children );
-				Object.assign(DeclarationWithFunction,FunctionEvaluation);
-			
-				GlobalDeclarations.push( DeclarationWithFunction );
-			}
-			else
-			{
-				const Declaration = (Section.SectionContent||Section.Prefix||'').trim();
-				//	just whitespace before ;
-				if ( !Declaration.length )
-					continue;
-
-				GlobalDeclarations.push( Declaration );
-			}
-		}
-		//	function definition
-		else if ( Section.OpenToken == '{' && Section.CloseToken == '}' )
-		{
-			//	prefix is symbol, like void main(x)
-			const Function = {};
-			Function.Routine = Section.Prefix;
-			
-			//	recurse into children
-			const FunctionEvaluation = EvaluateSections( Section.Children );
-			Object.assign(Function,FunctionEvaluation);
-			
-			GlobalFunctions.push( Function );
-		}
-		else if ( Section.OpenToken == '(' )
-		{
-			//	prefix is symbol, like void main(x)
-			const Function = {};
-			if ( Section.Prefix.length )
-			{
-				Function.Call = Section.Prefix;
-			}
-			
-			//	recurse into children
-			const FunctionEvaluation = EvaluateSections( Section.Children );
-			Object.assign(Function,FunctionEvaluation);
-			
-			Function.Functions = Function.Functions || [];
-			Function.Functions.push(Section.SectionContent);
-			
-			GlobalFunctions.push( Function );
-		}
-		else
-		{
-			console.log(`skipped ${Section.OpenToken}`);
-			//	comment
-			//	macro
-		}
-	}
-	
-	const Output = {};
-	if ( GlobalDeclarations.length )
-		Output.Declarations = GlobalDeclarations;
-	if ( GlobalFunctions.length )
-		Output.Functions = GlobalFunctions;
-	return Output;
-}
 
 
 
