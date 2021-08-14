@@ -446,9 +446,56 @@ class SectionOperator_t extends Section_t
 	static Match(Section)
 	{
 		return (Section.OperatorToken!=null);
-	}	
+	}
+	
+	get OperatorFunction()
+	{
+		//	get from language parser
+		//	turn operators into functions
+		const OperatorFunctions = {};
+		OperatorFunctions['+'] = 'add';
+		OperatorFunctions['/'] = 'divide';
+		OperatorFunctions['*'] = 'multiply';
+		OperatorFunctions['-'] = 'subtract';
+		
+		OperatorFunctions['='] = 'getright';
+		OperatorFunctions['return'] = 'getright';
+		OperatorFunctions['+='] = 'add';
+		OperatorFunctions['/='] = 'divide';
+		OperatorFunctions['*='] = 'multiply';
+		OperatorFunctions['-='] = 'subtract';
+		return OperatorFunctions[this.OperatorToken];
+	}
 }
 
+
+class SectionAssignmentOperator_t extends SectionOperator_t
+{
+	constructor(Section)
+	{
+		super(Section);
+	}
+	
+	get VariableName()
+	{
+		if ( this.OperatorToken == 'return' )
+			return this.OperatorToken;
+		return `var ${this.Prefix}`;
+	}
+	
+	static Match(Section)
+	{
+		if ( !super.Match(Section) )
+			return false;
+		//	if two children, left and right, then not assignment
+		console.log(`Is assignment operator? ${Section.Prefix} ${Section.OperatorToken}`,Section);
+		if ( Section.OperatorToken == 'return' )
+			return true;
+		if ( (Section.Prefix||'').length == 0 )
+			return false;
+		return true;
+	}	
+}
 
 class SectionEmptyStatement_t extends Section_t
 {
@@ -495,6 +542,7 @@ function ConvertSectionToType(Section)
 {
 	if ( SectionFunction_t.Match(Section) )	return new SectionFunction_t(Section);
 	if ( SectionComment_t.Match(Section) )	return new SectionComment_t(Section);
+	if ( SectionAssignmentOperator_t.Match(Section) )	return new SectionAssignmentOperator_t(Section);
 	if ( SectionOperator_t.Match(Section) )	return new SectionOperator_t(Section);
 	if ( SectionEmptyStatement_t.Match(Section) )	return new SectionEmptyStatement_t(Section);
 	return new Section_t(Section);
@@ -554,8 +602,6 @@ function SectionToCode(Section,PreviousOperatorVariable)
 	//	suffix code
 	if ( Section instanceof SectionOperator_t )
 	{
-		let Line = `${Section.VariableName} = `;
-		
 		//	section content is a literal... we should split that into its own variable
 		const LiteralVariableName = `${Section.ConstName}`;
 		if ( !LastChildVariable )
@@ -563,38 +609,24 @@ function SectionToCode(Section,PreviousOperatorVariable)
 			LastChildVariable = LiteralVariableName;
 			PushCode(`${LiteralVariableName} = ${Section.SectionContent}`);
 		}
-		let Left = PreviousOperatorVariable;
+		
+		let Left;
 		const Right = LastChildVariable;
 		
-		//	gr: for = operator, but also +=, return etc?
-		if ( !Left )
+		if ( Section instanceof SectionAssignmentOperator_t )
 		{
-			Left = Section.Prefix.length ? Section.Prefix : null;
-		}
-		
-		//	turn operators into functions
-		const OperatorFunctions = {};
-		OperatorFunctions['+'] = 'add';
-		OperatorFunctions['/'] = 'divide';
-		OperatorFunctions['*'] = 'multiply';
-		OperatorFunctions['-'] = 'subtract';
-		
-		if ( OperatorFunctions.hasOwnProperty(Section.OperatorToken) )
-		{
-			const OperatorFunction = OperatorFunctions[Section.OperatorToken];
-			Line += `${OperatorFunction}( ${Left}, ${Right} )`
+			Left = Section.VariableName;
 		}
 		else
 		{
-			if ( Left )
-			{
-				Line += `${Left} ${Section.OperatorToken} ${Right}`;
-			}
-			else	//	operator with no left side, +=, return, =
-			{
-				Line += `${Section.OperatorToken} ${Right}`;
-			}
+			//	shouldn't be empty
+			Left = PreviousOperatorVariable;
 		}
+		
+		const OperatorFunction = Section.OperatorFunction;
+		
+		let Line = `${Section.VariableName} = `;
+		Line += `${OperatorFunction}( ${Left}, ${Right} )`
 		PushCode(Line);
 	}
 	else if ( Section instanceof SectionFunction_t )

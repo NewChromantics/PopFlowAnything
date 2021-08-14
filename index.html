@@ -78,6 +78,7 @@ canvas
 	{
 		//	evaluate 1.2 -> 3.4
 		float Blue = fract( (mod(Time) * 1.2) + 3.4 );
+		Blue += 5.6;
 		return vec3( uv.x, Time, Blue );
 	}
 	
