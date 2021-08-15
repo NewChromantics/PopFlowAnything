@@ -8,7 +8,7 @@ async function GetGraphRenderCommands(ViewRect)
 {
 	const Commands = [];
 	
-	Commands.push(['SetRenderTarget',null,[0,1,1]]);
+	Commands.push(['SetRenderTarget',null,[0.2,0.2,0.3]]);
 	
 	if ( GraphRenderer )
 	{
@@ -31,8 +31,12 @@ export function SetFlowGraph(Flow)
 {
 	GraphRenderer = new GraphRenderer_t();
 	
-	for ( let Node of Flow )
-		GraphRenderer.CreateNode(Node);
+	for ( let NodeGroups of Flow )
+	{
+		//	these are groups atm
+		for ( let Node of NodeGroups )
+			GraphRenderer.CreateNode(Node);
+	}
 }
 
 export async function StartGraphRenderer(RenderViewName='Graph')

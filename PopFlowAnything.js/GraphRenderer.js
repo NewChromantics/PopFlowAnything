@@ -1,5 +1,5 @@
 import {CreateBlitQuadGeometry} from './PopEngine/CommonGeometry.js'
-import {GetNormalisedRect,GrowRect} from './PopEngine/Math.js'
+import {GetNormalisedRect,GrowRect,GetRectCenter} from './PopEngine/Math.js'
 
 const NodeBoxVert = `
 #version 100
@@ -27,11 +27,104 @@ void main()
 }
 `;
 
+
+const NodeLineVert = `
+#version 100
+precision highp float;
+attribute vec2 TexCoord;
+uniform vec2 LineStart;
+uniform vec2 LineEnd;
+varying vec2 LinePosition;
+uniform float LineWidth;
+void main()
+{
+	vec2 Dir = normalize( LineEnd - LineStart );
+	vec2 Cross = vec2( -Dir.y, Dir.x );
+	vec2 Position = mix( LineStart, LineEnd, TexCoord.y );
+	Position += mix( -Cross*LineWidth, Cross*LineWidth, TexCoord.x );	//	widen
+	Position += mix( -Dir*LineWidth, Dir*LineWidth, TexCoord.y );	//	endcaps
+	LinePosition = Position;
+	gl_Position.xy = Position;
+	//	flip
+	gl_Position.xy = mix( vec2(-1,1), vec2(1,-1), gl_Position.xy );
+	gl_Position.z = 0.0;
+	gl_Position.w = 1.0;
+}
+`;
+
+const NodeLineFrag = `
+#version 100
+precision highp float;
+uniform vec2 LineStart;
+uniform vec2 LineEnd;
+varying vec2 LinePosition;
+uniform float LineWidth;
+uniform float LineDashed;
+
+float TimeAlongLine2(vec2 Position,vec2 Start,vec2 End)
+{
+	vec2 Direction = End - Start;
+	float DirectionLength = length(Direction);
+	float Projection = dot( Position - Start, Direction) / (DirectionLength*DirectionLength);
+	
+	return Projection;
+}
+
+vec2 NearestToLine2(vec2 Position,vec2 Start,vec2 End)
+{
+	float Projection = TimeAlongLine2( Position, Start, End );
+	
+	//	past start
+	Projection = max( 0.0, Projection );
+	//	past end
+	Projection = min( 1.0, Projection );
+	
+	//	is using lerp faster than
+	//	Near = Start + (Direction * Projection);
+	vec2 Near = mix( Start, End, Projection );
+	return Near;
+}
+
+float DistanceToLine2(vec2 Position,vec2 Start,vec2 End)
+{
+	vec2 Near = NearestToLine2( Position, Start, End );
+	return length( Near - Position );
+}
+
+float DistanceToLine()
+{
+	float Distance = DistanceToLine2( LinePosition, LineStart, LineEnd );
+	Distance -= LineWidth;
+	return Distance;
+}
+
+
+void main()
+{
+	float Distance = DistanceToLine();
+	float Time = TimeAlongLine2( LinePosition, LineStart, LineEnd );
+	
+	float DashTime = fract( Time*10.0 );
+	bool DashedAway = DashTime > 0.5; 
+
+	if ( DashedAway )
+		discard;
+
+	if ( Distance > 0.0 )
+	{
+		gl_FragColor = vec4(1,0,0,1);
+		discard;
+		return;
+	}
+	gl_FragColor = vec4(0,1,0,1);
+}
+`;
+
 export class Graph_t
 {
 	constructor()
 	{
-		this.Nodes = {};
+		this.Nodes = [];	//	in flow order
 		this.LastIdentCounter = 3000;
 	}
 	
@@ -42,14 +135,27 @@ export class Graph_t
 		this.LastIdentCounter++;
 		Node.Ident = this.LastIdentCounter;
 		
-		this.Nodes[Node.Ident] = Node;
+		this.Nodes.push(Node);
 		
 		return Node;
 	}
 	
 	GetNode(Ident)
 	{
-		return this.Nodes[Ident];
+		return this.Nodes.find( n => n.Ident == Ident );
+	}
+	
+	GetFlowConnectionNodes()
+	{
+		const FlowPairs = [];
+		for ( let n=1;	n<this.Nodes.length;	n++ )
+		{
+			const p = n-1;
+			const Prev = this.Nodes[p];
+			const Next = this.Nodes[n];
+			FlowPairs.push( [Prev, Next] );
+		}
+		return FlowPairs;
 	}
 }
 
@@ -66,30 +172,51 @@ class NodeBox_t
 	{
 		const Width = 40;
 		const Height = 20;
-		const Spacing = 5;
+		const Spacing = 10;
 		const x = Index * (Width+Spacing);
 		const y = 0;
 		return [x,y,Width,Height];
 	}
+
+	GetLeftRect(Index)
+	{
+		const Pad = 2;
+		const w = 1;
+		const h = w;
+		const x = this.Rect[0] - (w/2);
+		const y = this.Rect[1] + Pad + (Index*(h+Pad));
+		return [x,y,w,h];
+	}
+	
+	GetRightRect(Index)
+	{
+		const Pad = 2;
+		const w = 1;
+		const h = w;
+		const Right = this.Rect[2];
+		const x = this.Rect[0] + Right - (w/2);
+		const y = this.Rect[1] + (Index*(h+Pad)) + Pad ;
+		return [x,y,w,h];
+	}
+	
+	GetFlowInputRect()
+	{
+		return this.GetLeftRect(0);
+	}
+	
+	GetFlowOutputRect()
+	{
+		return this.GetRightRect(0);
+	}
 	
 	GetInputRect(Index)
 	{
-		const Pad = 2;
-		const w = 4;
-		const h = w;
-		const x = Pad;
-		const y = Pad + (Index*(h+Pad));
-		return [x,y,w,h];
+		return this.GetLeftRect( Index+2 );
 	}
 	
 	GetOutputRect(Index)
 	{
-		const Pad = 2;
-		const w = 4;
-		const h = w;
-		const x = this.Rect[2] - Pad - w;
-		const y = Pad + (Index*(h+Pad));
-		return [x,y,w,h];
+		return this.GetRightRect( Index+2 );
 	}
 };
 
@@ -99,25 +226,32 @@ export default class GraphRenderer_t
 	{
 		this.Graph = new Graph_t();
 		this.ScrollXy = [0,0];
-		this.ZoomMultiplier = 1;	//	units... per pixel?
+		this.ZoomDivider = 1;
 		
 		this.NodeBoxes = {};	//	[Ident] = box
 		
 		this.BoxGeometry = null;
 		this.BoxShader = null;
+		this.LineGeometry = null;
+		this.LineShader = null;
+	}
+	
+	get ZoomMultiplier()
+	{
+		return 1.0 / this.ZoomDivider;
 	}
 	
 	Zoom(Amount)
 	{
-		this.ZoomMultiplier -= Amount;
-		if ( this.ZoomMultiplier < 0.1 )
-			this.ZoomMultiplier = 0.1;
+		this.ZoomDivider -= Amount;
+		if ( this.ZoomDivider < 0.1 )
+			this.ZoomDivider = 0.1;
 	}
 	
 	ScrollPx(Deltax,Deltay)
 	{
-		Deltax /= this.ZoomMultiplier;
-		Deltay /= this.ZoomMultiplier;
+		Deltax *= this.ZoomMultiplier;
+		Deltay *= this.ZoomMultiplier;
 		this.ScrollXy[0] += Deltax;
 		this.ScrollXy[1] += Deltay;
 	}
@@ -151,6 +285,16 @@ export default class GraphRenderer_t
 		{
 			this.BoxShader = await RenderContext.CreateShader( NodeBoxVert, NodeBoxFrag, null, ['TexCoord'] );
 		}
+		
+		if ( !this.LineGeometry )
+		{
+			this.LineGeometry = this.BoxGeometry;
+		}
+		
+		if ( !this.LineShader )
+		{
+			this.LineShader = await RenderContext.CreateShader( NodeLineVert, NodeLineFrag, null, ['TexCoord'] );
+		}
 	}
 	
 	GetRenderCommands(ViewRect)
@@ -162,7 +306,7 @@ export default class GraphRenderer_t
 		ViewRect[1] -= this.ScrollXy[1];
 		
 		let ZoomedViewRect = ViewRect.slice();
-		ZoomedViewRect = GrowRect( ZoomedViewRect, 1.0/this.ZoomMultiplier );
+		ZoomedViewRect = GrowRect( ZoomedViewRect, this.ZoomMultiplier );
 		
 		const Commands = [];
 		
@@ -172,6 +316,27 @@ export default class GraphRenderer_t
 			Uniforms.Rect = GetNormalisedRect( Box.Rect, ZoomedViewRect );
 			
 			Commands.push(['Draw',this.BoxGeometry,this.BoxShader,Uniforms]);
+		}
+		
+		const FlowConnectionNodes = this.Graph.GetFlowConnectionNodes();
+		for ( let FlowConnection of FlowConnectionNodes )
+		{
+			const Box0 = this.GetNodeBox( FlowConnection[0] );
+			const Box1 = this.GetNodeBox( FlowConnection[1] );
+			const Rect0 = GetNormalisedRect( Box0.GetFlowOutputRect(), ZoomedViewRect );
+			const Rect1 = GetNormalisedRect( Box1.GetFlowInputRect(), ZoomedViewRect );
+			const StartPosition = GetRectCenter( Rect0 );
+			const EndPosition = GetRectCenter( Rect1 );
+
+			const LineWidth = Rect0[3];
+			//const SizeNorm = GetNormalisedRect( [0,0,LineWidth,LineWidth], ZoomedViewRect ); 
+
+			const Uniforms = {};
+			Uniforms.LineStart = StartPosition;
+			Uniforms.LineEnd = EndPosition;
+			Uniforms.LineWidth = LineWidth;
+			Uniforms.LineDashed = true;
+			Commands.push(['Draw',this.LineGeometry,this.LineShader,Uniforms]);
 		}
 		
 		return Commands;

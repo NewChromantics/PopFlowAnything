@@ -121,14 +121,29 @@ function OnSourceElementChanged(Element)
 		//const NewSource = StripComments(Source);
 		//Graph.textContent = NewSource;
 
-		const Tokenised = ParseGlsl(Source);
+		const FlowNodes = ParseGlsl(Source);
 		
-		PopFlowAnything.SetFlowGraph(Tokenised);
+		if ( typeof FlowNodes == typeof {} && !Array.isArray(FlowNodes) )
+		{
+			Graph.textContent = JSON.stringify(FlowNodes,null,'\t');
+			return;
+		}
 		
-		if ( typeof Tokenised == typeof '' )
-			Graph.textContent = Tokenised;
-		else
-			Graph.textContent = JSON.stringify(Tokenised,null,'\t');
+		PopFlowAnything.SetFlowGraph(FlowNodes);
+		
+		
+		const CodeLines = [];
+		//	these are currently node groups
+		for ( let NodeGroup of FlowNodes )
+		{
+			for ( let Node of NodeGroup )
+				CodeLines.push( Node.GetCode() );
+			CodeLines.push('');
+			CodeLines.push('');
+		}
+		
+		const FlowSource = CodeLines.join('\n');
+		Graph.textContent = FlowSource;
 	}
 	catch(e)
 	{

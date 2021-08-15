@@ -374,35 +374,25 @@ export function ParseGlsl(Source)
 	let SectionTree = SplitSections(Source,Language);
 	SectionTree = SectionTree.map(ConvertSectionToType);
 	
-	function SectionFunctionsToCode(Section)
+	function SectionFunctionsToFlowNodes(Section)
 	{
 		if ( Section instanceof SectionFunction_t )
 		{
-			let Code = SectionTreeToCode(SectionTree,Section.FunctionName);
-			Code = '\n\n' + Code.join('\n');
-			Code += '\n\n';
-			return Code;
+			return SectionTreeToFlowNodes(SectionTree,Section.FunctionName);
 		}
+		/*
 		//	otuput variable declarations
 		if ( Section instanceof SectionEmptyStatement_t )
 		{
 			return Section.SectionContent;
 		}
+		*/
 	}
 	
 	//	rebuild code to show we can iterate through
-	let CodeSections = SectionTree.map(SectionFunctionsToCode);
-	CodeSections = CodeSections.filter( cs => cs!=null );
-	CodeSections = CodeSections.join('\n');
-	return CodeSections;
-	
-	const Output = {};
-	Output.Code = Code;
-	Output.Sections = SectionTree;
-	return Output;
-	
-	return Code;
-	return SectionTree;
+	let NodeGroups = SectionTree.map(SectionFunctionsToFlowNodes);
+	NodeGroups = NodeGroups.filter( n => n!=null );
+	return NodeGroups;
 }
 
 
@@ -816,7 +806,7 @@ function SectionToFlowNodes(Section,PreviousOperatorVariable)
 }
 
 
-function SectionTreeToCode(SectionTree,EntryFunction)
+function SectionTreeToFlowNodes(SectionTree,EntryFunction)
 {
 	//	first find the entry section (which must be a global, so is a root node)
 	SectionTree = SectionTree.map(ConvertSectionToType);
@@ -826,8 +816,7 @@ function SectionTreeToCode(SectionTree,EntryFunction)
 		throw `Failed to find entry function ${EntryFunction}`;
 	
 	const Nodes = SectionToFlowNodes(EntrySection);
-	const CodeLines = Nodes.map( n => `${n.GetCode()}\t\t\t// ${n.constructor.name}` );
-	return CodeLines;
+	return Nodes;
 }
 
 
