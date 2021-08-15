@@ -84,7 +84,7 @@ export class Language_Glsl extends Language_t
 			return [];
 		
 		//	; detects an end of section, then re-evaluates previous content
-		let OpenSections = [';','{','/*','//','#'];
+		const OpenSections = [';','{','/*','//','#'];
 
 		//	only evaluate () inside a single line
 		//	or either side of an operator

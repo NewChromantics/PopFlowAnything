@@ -614,19 +614,35 @@ class Node_t
 {
 }
 
+
+
 //	variable declaration
 class NodeVariableDeclaration_t extends Node_t
 {
 	constructor(VariableName)
 	{
 		super();
-		this.Output = VariableName;
+		this.Outputs = [VariableName];
 	}
 	
 	GetCode()
 	{
-		return ``;
 		return `var ${this.Output};`;
+	}
+}
+
+//	gr: turn this into a simple entry node with multiple outputs
+class NodeEntry_t extends Node_t
+{
+	constructor(OutputVariables)
+	{
+		super();
+		this.Outputs = OutputVariables;
+	}
+	
+	GetCode()
+	{
+		return `--> entry( ${this.Outputs} )`;
 	}
 }
 
@@ -637,12 +653,12 @@ class NodeVariableSet_t extends Node_t
 	{
 		super();
 		this.Input = RightVariable;
-		this.Output = VariableName;
+		this.Outputs = [VariableName];
 	}
 	
 	GetCode()
 	{
-		return `${this.Output} = ${this.Input};`;
+		return `${this.Outputs[0]} = ${this.Input};`;
 	}
 }
 
@@ -653,13 +669,13 @@ class NodeFunctionCall_t extends Node_t
 	{
 		super();
 		this.FunctionName = FunctionName;
-		this.Arguments = Arguments;
-		this.Output = OutputVariableName;
+		this.Inputs = Arguments;
+		this.Outputs = [OutputVariableName];
 	}
 		
 	GetCode()
 	{
-		return `${this.Output} = ${this.FunctionName}( ${this.Arguments} );`;
+		return `${this.Outputs[0]} = ${this.FunctionName}( ${this.Inputs} );`;
 	}
 }
 
@@ -682,6 +698,8 @@ function SectionToFlowNodes(Section,PreviousOperatorVariable)
 		//	need to declare args as new scoped variables
 		//	todo: running scoped vars!
 		//	todo: split args, multiple vars
+		PushNode( new NodeEntry_t(Section.Arguments) );
+		
 		for ( let Argument of Section.Arguments )
 		{
 			const VariableName = Section.GetArgumentVariableName(Argument);
