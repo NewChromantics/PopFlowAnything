@@ -122,6 +122,9 @@ function OnSourceElementChanged(Element)
 		//Graph.textContent = NewSource;
 
 		const Tokenised = ParseGlsl(Source);
+		
+		PopFlowAnything.SetFlowGraph(Tokenised);
+		
 		if ( typeof Tokenised == typeof '' )
 			Graph.textContent = Tokenised;
 		else
@@ -190,7 +193,6 @@ const UnitTestSource = `
 `;
 
 PopFlowAnything.StartGraphRenderer('GraphCanvas');
-
 </script>
 
 </body>
