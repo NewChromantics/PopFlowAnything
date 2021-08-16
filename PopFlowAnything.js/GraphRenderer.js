@@ -130,12 +130,16 @@ export class Graph_t
 	
 	CreateNode(Node)
 	{
-		Node = Object.assign({},Node);
+		//Node = Object.assign({},Node);
 		
 		this.LastIdentCounter++;
 		Node.Ident = this.LastIdentCounter;
 		
+		Node.Inputs = Node.Inputs || [];
+		Node.Outputs = Node.Outputs || [];
+		
 		this.Nodes.push(Node);
+		this.OnNodesChanged();
 		
 		return Node;
 	}
@@ -145,8 +149,51 @@ export class Graph_t
 		return this.Nodes.find( n => n.Ident == Ident );
 	}
 	
+	OnNodesChanged()
+	{
+		this.ConnectionsCache = null;
+	}
+	
+	//	outputs array of 
+	//	[Left(output).Node and .OutputIndex,
+	//	right(input).Node and .InputIndex]
+	GetConnections()
+	{
+		if ( this.ConnectionsCache )
+			return this.ConnectionsCache;
+			
+		const Connections = [];
+		for ( let OutputNode of this.Nodes )
+		{
+			for ( let InputNode of this.Nodes )
+			{
+				for ( let o=0;	o<OutputNode.Outputs.length;	o++ )
+				{
+					for ( let i=0;	i<InputNode.Inputs.length;	i++ )
+					{
+						const OutputName = OutputNode.Outputs[o];
+						const InputName = InputNode.Inputs[i];
+						if ( OutputName != InputName )
+							continue;
+						
+						const Left = {};
+						Left.Node = OutputNode;
+						Left.OutputIndex = o;
+						const Right = {};
+						Right.Node = InputNode;
+						Right.InputIndex = i;
+						Connections.push([Left,Right]);
+					}
+				}
+			}
+		}
+		this.ConnectionsCache = Connections;
+		return Connections;
+	}
+	
 	GetFlowConnectionNodes()
 	{
+		return [];
 		const FlowPairs = [];
 		for ( let n=1;	n<this.Nodes.length;	n++ )
 		{
@@ -195,7 +242,7 @@ class NodeBox_t
 		const h = w;
 		const Right = this.Rect[2];
 		const x = this.Rect[0] + Right - (w/2);
-		const y = this.Rect[1] + (Index*(h+Pad)) + Pad ;
+		const y = this.Rect[1] + Pad + (Index*(h+Pad));
 		return [x,y,w,h];
 	}
 	
@@ -325,6 +372,27 @@ export default class GraphRenderer_t
 			const Box1 = this.GetNodeBox( FlowConnection[1] );
 			const Rect0 = GetNormalisedRect( Box0.GetFlowOutputRect(), ZoomedViewRect );
 			const Rect1 = GetNormalisedRect( Box1.GetFlowInputRect(), ZoomedViewRect );
+			const StartPosition = GetRectCenter( Rect0 );
+			const EndPosition = GetRectCenter( Rect1 );
+
+			const LineWidth = Rect0[3];
+			//const SizeNorm = GetNormalisedRect( [0,0,LineWidth,LineWidth], ZoomedViewRect ); 
+
+			const Uniforms = {};
+			Uniforms.LineStart = StartPosition;
+			Uniforms.LineEnd = EndPosition;
+			Uniforms.LineWidth = LineWidth;
+			Uniforms.LineDashed = true;
+			Commands.push(['Draw',this.LineGeometry,this.LineShader,Uniforms]);
+		}
+		
+		const ConnectionNodes = this.Graph.GetConnections();
+		for ( let Connection of ConnectionNodes )
+		{
+			const Box0 = this.GetNodeBox( Connection[0].Node );
+			const Box1 = this.GetNodeBox( Connection[1].Node );
+			const Rect0 = GetNormalisedRect( Box0.GetOutputRect(Connection[0].OutputIndex), ZoomedViewRect );
+			const Rect1 = GetNormalisedRect( Box1.GetInputRect(Connection[1].InputIndex), ZoomedViewRect );
 			const StartPosition = GetRectCenter( Rect0 );
 			const EndPosition = GetRectCenter( Rect1 );
 
