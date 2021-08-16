@@ -642,7 +642,7 @@ class NodeVariableSet_t extends Node_t
 	constructor(VariableName,RightVariable)
 	{
 		super();
-		this.Input = RightVariable;
+		this.Inputs = [RightVariable];
 		this.Outputs = [VariableName];
 	}
 	
@@ -659,7 +659,7 @@ class NodeFunctionCall_t extends Node_t
 	{
 		super();
 		this.FunctionName = FunctionName;
-		this.Inputs = Arguments;
+		this.Inputs = [Arguments];
 		this.Outputs = [OutputVariableName];
 	}
 		
